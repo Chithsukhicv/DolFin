@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+serviceAccountKey.json
+firebase-adminsdk-*.json
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Project-specific
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+backend/logs/
+*.log
