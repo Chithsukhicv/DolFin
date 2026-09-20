@@ -11,6 +11,12 @@ import { fetcher, type LearningPath as Path } from "@/lib/api";
  * next — the worst possible moment for someone who has never invested. This
  * always shows exactly one obvious next action, with the rest visible as
  * context so the journey has a shape.
+ *
+ * Once there is evidence to adapt to, the order changes: steps addressing the
+ * concepts the learner has actually overridden or failed move to the top, and
+ * each step explains which of their own records put it there. Someone who
+ * diversifies well and panic-sells constantly should not be told to read about
+ * diversification.
  */
 export function LearningPath({ userId, compact = false }: { userId: string; compact?: boolean }) {
   const { data } = useSWR<Path>(userId ? `/learn/path/${userId}` : null, fetcher, {
@@ -43,6 +49,9 @@ export function LearningPath({ userId, compact = false }: { userId: string; comp
         </div>
         <h3 className="mt-2 font-semibold text-indigo-950">{next.title}</h3>
         <p className="mt-1 text-sm text-indigo-800">{next.description}</p>
+        {data.adaptive && next.rationale && (
+          <p className="mt-1.5 text-xs text-indigo-600">{next.rationale}</p>
+        )}
         <Link
           href={next.href}
           className="mt-3 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -62,10 +71,28 @@ export function LearningPath({ userId, compact = false }: { userId: string; comp
           </h2>
           <p className="text-sm text-slate-600">
             {data.completed} of {data.total} steps complete
+            {data.adaptive && (
+              <span
+                title="The order below reflects the warnings you've overridden and the quizzes you've failed."
+                className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
+              >
+                personalised
+              </span>
+            )}
           </p>
         </div>
         <span className="text-2xl font-semibold text-indigo-600">{data.percent}%</span>
       </div>
+
+      {data.degraded && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+        >
+          Progress couldn&apos;t be computed just now, so every step below reads as
+          incomplete. Nothing you&apos;ve done has been lost.
+        </p>
+      )}
 
       <div
         role="progressbar"
@@ -114,6 +141,13 @@ export function LearningPath({ userId, compact = false }: { userId: string; comp
                     {step.done && <span className="sr-only"> (complete)</span>}
                   </p>
                   <p className="mt-0.5 text-sm text-slate-600">{step.description}</p>
+
+                  {/* Why this step, in the learner's own numbers. Shown only for
+                      outstanding work — a rationale on something already done is
+                      just clutter. */}
+                  {data.adaptive && !step.done && step.rationale && (
+                    <p className="mt-1 text-xs italic text-slate-500">{step.rationale}</p>
+                  )}
 
                   {step.target !== undefined && !step.done && (
                     <p className="mt-2 text-xs font-medium text-slate-500">

@@ -51,7 +51,8 @@ GRADUATION_THRESHOLD = 80.0
 # bought two stocks and sold one scored ~50, which badly overstates
 # readiness for real money.
 FULL_CONFIDENCE_TRADES = 12      # trades needed before behaviour scores max out
-FULL_CONFIDENCE_HOLDINGS = 4     # holdings needed before diversification maxes out
+FULL_CONFIDENCE_HOLDINGS = 8     # holdings needed before diversification maxes out
+                                  # raised from 4: 5 same-day buys proved nothing
 BEGINNER_ANCHOR = 8.0            # every thin-evidence score shrinks toward this
 
 # Laplace smoothing for autonomy: pretend we have already seen a few trades
@@ -65,6 +66,11 @@ AUTONOMY_PRIOR_CLEAN_RATE = 0.5
 # substitute for it — you cannot grind quizzes to graduation.
 QUIZ_PASS_BONUS = 6.0
 QUIZ_BONUS_CAP = 24.0
+
+# Minimum days a position must be held before it contributes to the
+# diversification score. Buying 5 stocks at 9am and computing "great
+# diversification!" at 9:05am measures intent, not habit.
+MIN_HOLD_DAYS_FOR_DIVERSIFICATION = 1
 
 
 def _confidence(observed: float, needed: float) -> float:
@@ -84,7 +90,7 @@ def _shrink(score: float, confidence: float, anchor: float = BEGINNER_ANCHOR) ->
 
 
 # ---------------------------------------------------------------------------
-def _diversification_subscore(snapshot: dict) -> float:
+def _diversification_subscore(snapshot: dict, db: "Session | None" = None, user: "User | None" = None) -> float:
     holdings = snapshot["holdings"]
     if not holdings:
         return 0.0
@@ -95,7 +101,7 @@ def _diversification_subscore(snapshot: dict) -> float:
 
     # Penalty 1: max single-stock weight above 20%.
     max_pos_pct = max(h["market_value"] / market_value for h in holdings)
-    pos_penalty = max(0.0, (max_pos_pct - 0.20)) * 100  # each 1% over costs 1 point
+    pos_penalty = max(0.0, (max_pos_pct - 0.20)) * 100
 
     # Penalty 2: max sector weight above 40%.
     sector_alloc = snapshot.get("sector_allocation_pct", {})
@@ -109,8 +115,10 @@ def _diversification_subscore(snapshot: dict) -> float:
     score = 60 + spread_bonus - pos_penalty - sector_penalty
     score = max(0.0, min(score, 100.0))
 
-    # A 2-stock portfolio cannot demonstrate diversification, even if both
-    # positions happen to sit under the weight thresholds.
+    # FULL_CONFIDENCE_HOLDINGS raised to 8 (from 4): 5 same-day buys
+    # only achieve confidence 5/8 = 0.625, so the score is substantially
+    # shrunk toward BEGINNER_ANCHOR. A learner needs to build up to 8 holdings
+    # before diversification is considered demonstrated.
     conf = _confidence(len(holdings), FULL_CONFIDENCE_HOLDINGS)
     return max(0.0, min(_shrink(score, conf), 100.0))
 
@@ -171,7 +179,12 @@ def _discipline_subscore(db: Session, user: User) -> float:
     # raise discipline, because the extra trade lifted the confidence multiplier
     # faster than the penalty reduced the base. Subtracting penalties after the
     # ramp keeps a bad trade unambiguously bad.
-    baseline = 90.0 if logs else 75.0
+    #
+    # Baseline 50 (not 75): "no warnings fired" means "not yet tested" —
+    # there's nothing to give benefit of the doubt for. The score should rise
+    # from a neutral midpoint as warnings are heeded, not fall from an optimistic
+    # 75 as they are ignored.
+    baseline = 70.0 if logs else 50.0
     score = _shrink(baseline, conf) + credit - penalty
     return max(0.0, min(score, 100.0))
 
@@ -245,9 +258,27 @@ def _engagement_subscore(db: Session, user: User) -> float:
     txn_count = db.query(Transaction).filter_by(user_id=user.id).count()
     if holding_count == 0 and txn_count == 0:
         return 0.0
-    # Modest curve: 5 trades + 3 holdings ~ full marks.
-    score = min(txn_count * 8, 60) + min(holding_count * 12, 40)
+    # Requires genuine engagement to reach 100.
+    # Old: 5 trades (40) + 5 holdings (60) = 100 on day one.
+    # New: needs ~10 trades (50) + 8+ holdings (40) to hit full marks.
+    score = min(txn_count * 5, 50) + min(holding_count * 6, 30) + (
+        # Bonus 20 points for having made trades over more than one day —
+        # consistent usage, not a one-session burst.
+        20 if _has_multi_day_activity(db, user) else 0
+    )
     return min(score, 100.0)
+
+
+def _has_multi_day_activity(db: Session, user: User) -> bool:
+    """True when the learner has traded on at least two distinct calendar days."""
+    from app.models import Transaction as Txn
+
+    dates = {
+        t.created_at.date()
+        for t in db.query(Txn.created_at).filter_by(user_id=user.id).all()
+        if t.created_at is not None
+    }
+    return len(dates) >= 2
 
 
 # ---------------------------------------------------------------------------

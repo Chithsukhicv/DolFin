@@ -6,6 +6,9 @@ import { fetcher, type ConceptProgress, type InterventionLogItem } from "@/lib/a
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
 import { ErrorState } from "@/components/States";
+import { PatternPanel } from "@/components/PatternPanel";
+import { ReflectionHistory } from "@/components/ReflectionHistory";
+import { RetestPanel } from "@/components/RetestPanel";
 import { severityClasses } from "@/lib/format";
 
 export default function CoachPage() {
@@ -34,6 +37,17 @@ export default function CoachPage() {
           Every warning the coach fired and what you did with it.
         </p>
       </header>
+
+      {/* Named habits first. A learner arriving here wants to know what they
+          keep doing, not to scroll a chronological log looking for it. */}
+      <PatternPanel userId={userId} />
+
+      {/* Anything they've failed, with a route to genuinely new questions. */}
+      <RetestPanel userId={userId} />
+
+      {/* Then their own words. Reading past reasons together is where the habit
+          becomes visible to the learner themselves. */}
+      <ReflectionHistory userId={userId} />
 
       {/* Which lessons are landing and which keep tripping them up. This is the
           learner's own behavioural mirror, not just a list of past events. */}

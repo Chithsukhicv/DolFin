@@ -32,7 +32,12 @@ SEED_STOCKS: list[dict] = [
 
     # Auto
     {"symbol": "MARUTI.NS", "name": "Maruti Suzuki", "sector": "Auto", "market_cap_band": "large", "risk_level": "medium"},
-    {"symbol": "TATAMOTORS.NS", "name": "Tata Motors", "sector": "Auto", "market_cap_band": "large", "risk_level": "high"},
+    # Tata Motors demerged in late 2025: the passenger-vehicle business kept the
+    # listing and now trades as TMPV, while the commercial-vehicle arm listed
+    # separately. TATAMOTORS.NS returns no data at all — run
+    # scripts/audit_catalogue.py to catch this class of breakage, because a dead
+    # symbol stays browsable and only fails at the moment someone tries to trade it.
+    {"symbol": "TMPV.NS", "name": "Tata Motors Passenger Vehicles", "sector": "Auto", "market_cap_band": "large", "risk_level": "high"},
     {"symbol": "M&M.NS", "name": "Mahindra & Mahindra", "sector": "Auto", "market_cap_band": "large", "risk_level": "medium"},
 
     # Pharma
@@ -85,20 +90,78 @@ def is_diversified_instrument(symbol: str) -> bool:
     return symbol in DIVERSIFIED_SYMBOLS
 
 
-def seed_if_empty(session) -> int:
-    """Upsert the catalogue. Returns the number of rows inserted.
+def sync_catalogue(session) -> dict:
+    """Reconcile the stocks table with ``SEED_STOCKS``.
 
-    Adds any symbol missing from the table rather than bailing out when the
-    table is merely non-empty. The old early-return meant newly added symbols
-    (the ETFs and mid-caps) would never appear for anyone with an existing
-    database, which is every existing user.
+    Insert-only was not enough. Corporate actions retire tickers — Tata Motors
+    became TMPV after its 2025 demerger — and a retired symbol left in the table
+    stays fully browsable, searchable and clickable, then fails only at the moment
+    a learner tries to price or trade it. That is a worse failure than the symbol
+    simply not being there.
+
+    So this also updates changed metadata and removes symbols that have dropped
+    out of the seed list. Removal is skipped for any symbol a learner still holds
+    or has traded: deleting it would orphan their holding and silently rewrite
+    their history. Those are logged instead, and the portfolio snapshot already
+    survives an unpriceable holding by falling back to cost basis.
     """
-    from app.models import Stock
+    import logging
 
-    existing = {s for (s,) in session.query(Stock.symbol).all()}
-    new_rows = [Stock(**s) for s in SEED_STOCKS if s["symbol"] not in existing]
-    if not new_rows:
-        return 0
-    session.add_all(new_rows)
-    session.commit()
-    return len(new_rows)
+    from app.models import Holding, Stock, Transaction
+
+    log = logging.getLogger(__name__)
+
+    wanted = {s["symbol"]: s for s in SEED_STOCKS}
+    existing = {row.symbol: row for row in session.query(Stock).all()}
+
+    inserted = updated = removed = 0
+
+    for symbol, spec in wanted.items():
+        row = existing.get(symbol)
+        if row is None:
+            session.add(Stock(**spec))
+            inserted += 1
+            continue
+        changed = False
+        for field in ("name", "sector", "market_cap_band", "risk_level"):
+            if getattr(row, field) != spec[field]:
+                setattr(row, field, spec[field])
+                changed = True
+        if changed:
+            updated += 1
+
+    retired = [sym for sym in existing if sym not in wanted]
+    kept_because_held: list[str] = []
+    for symbol in retired:
+        in_use = (
+            session.query(Holding).filter_by(symbol=symbol).first() is not None
+            or session.query(Transaction).filter_by(symbol=symbol).first() is not None
+        )
+        if in_use:
+            kept_because_held.append(symbol)
+            continue
+        session.delete(existing[symbol])
+        removed += 1
+
+    if inserted or updated or removed:
+        session.commit()
+
+    if kept_because_held:
+        log.warning(
+            "Retired symbols kept because learners still hold or traded them: %s. "
+            "Their positions will price from cost basis.",
+            ", ".join(sorted(kept_because_held)),
+        )
+
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "removed": removed,
+        "kept_because_held": sorted(kept_because_held),
+        "total": len(wanted),
+    }
+
+
+def seed_if_empty(session) -> int:
+    """Backwards-compatible alias. Prefer ``sync_catalogue``."""
+    return sync_catalogue(session)["inserted"]

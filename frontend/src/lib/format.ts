@@ -22,21 +22,21 @@ export function severityClasses(sev: "info" | "warn" | "critical"): {
   switch (sev) {
     case "critical":
       return {
-        badge: "bg-red-100 text-red-700 border-red-200",
-        panel: "bg-red-50 border-red-300",
-        text: "text-red-800",
+        badge: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+        panel: "bg-rose-500/[0.07] border-rose-500/25",
+        text: "text-rose-200",
       };
     case "warn":
       return {
-        badge: "bg-amber-100 text-amber-800 border-amber-200",
-        panel: "bg-amber-50 border-amber-300",
-        text: "text-amber-900",
+        badge: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+        panel: "bg-amber-500/[0.07] border-amber-500/25",
+        text: "text-amber-200",
       };
     default:
       return {
-        badge: "bg-sky-100 text-sky-700 border-sky-200",
-        panel: "bg-sky-50 border-sky-300",
-        text: "text-sky-900",
+        badge: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+        panel: "bg-blue-500/[0.07] border-blue-500/25",
+        text: "text-blue-200",
       };
   }
 }

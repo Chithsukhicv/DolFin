@@ -3,10 +3,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+import logging
+
 from app.db import get_db
 from app.models import Reflection, User
 from app.schemas import ReflectionCreate
+from app.services import indexer
 from app.services import interventions as interventions_service
+from app.services import reflection_analyzer
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reflections", tags=["reflections"])
 
@@ -17,6 +23,9 @@ def create(payload: ReflectionCreate, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Store the learner's text first. R4.11 requires a stored reason and a
+    # returned acknowledgement to always occur together, so if this write fails
+    # the request fails rather than returning an acknowledgement for lost text.
     ref = Reflection(
         user_id=user.id,
         symbol=payload.symbol,
@@ -36,6 +45,15 @@ def create(payload: ReflectionCreate, db: Session = Depends(get_db)):
         db, user, payload.preview_id or "", "heeded"
     )
 
+    # Assess the learner's written reasoning. Advisory only — the heeded count
+    # above is already final regardless of what the analysis concludes.
+    analysis = reflection_analyzer.analyse(
+        db, user, ref, rule_ids=payload.triggering_rule_ids
+    )
+
+    # The learner's record changed, so their retrieval corpus is now stale.
+    indexer.refresh_corpus_b_safe(db, user)
+
     db.refresh(ref)
     return {
         "id": ref.id,
@@ -46,6 +64,7 @@ def create(payload: ReflectionCreate, db: Session = Depends(get_db)):
         "reason": ref.reason,
         "preview_id": ref.preview_id,
         "warnings_heeded": heeded_count,
+        "analysis": analysis,
         "created_at": ref.created_at.isoformat(),
     }
 
@@ -66,6 +85,16 @@ def list_reflections(user_id: str, db: Session = Depends(get_db)):
             "quantity": r.quantity,
             "triggering_rule_ids": r.triggering_rule_ids,
             "reason": r.reason,
+            "preview_id": r.preview_id,
+            # The AI's read on the learner's reasoning, so a past reflection can
+            # be revisited with its assessment intact. Omitting these meant the
+            # most valuable teaching moment in the app existed for one screen and
+            # then vanished.
+            "reasoning_class": r.reasoning_class,
+            "ai_response": r.ai_response,
+            "ai_citations": r.ai_citations or [],
+            "ai_mode": r.ai_mode,
+            "source": "ai" if r.ai_response else None,
             "created_at": r.created_at.isoformat(),
         }
         for r in rows

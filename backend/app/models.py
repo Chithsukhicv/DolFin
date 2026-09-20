@@ -187,6 +187,47 @@ class ReadinessSnapshot(Base):
 
 
 # ---------------------------------------------------------------------------
+# RAG: retrievable knowledge chunks
+# ---------------------------------------------------------------------------
+class KnowledgeChunk(Base):
+    """One retrievable unit of text, from either corpus.
+
+    Two corpora share this table because retrieval ranks across both in a single
+    pass, and keeping them together means there is exactly one code path — and
+    therefore exactly one place where per-user access control is enforced.
+
+    ``corpus='A'`` is curated content shared by everyone (``owner_user_id`` null).
+    ``corpus='B'`` is one learner's own behavioural record, and is the reason the
+    owner column exists: a leak here would expose one learner's trades to another.
+
+    ``chunk_key`` is a stable, human-derived identity (e.g.
+    ``concept:panic_selling:section:2``) so re-indexing updates rows in place
+    rather than duplicating them.
+    """
+
+    __tablename__ = "knowledge_chunks"
+    __table_args__ = (UniqueConstraint("chunk_key", name="uq_chunk_key"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    corpus: Mapped[str] = mapped_column(String, index=True)  # "A" | "B"
+    chunk_key: Mapped[str] = mapped_column(String, index=True)
+    # Null for Corpus A. Set for every Corpus B chunk.
+    owner_user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+
+    source_title: Mapped[str] = mapped_column(String)
+    source_reference: Mapped[str | None] = mapped_column(String, nullable=True)
+    body: Mapped[str] = mapped_column(String)
+
+    # Stored as JSON so the schema stays portable to Firestore, which has no
+    # native float-array column. Null when no embedding provider is configured;
+    # the retriever falls back to lexical ranking in that case.
+    embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    indexed_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+
+# ---------------------------------------------------------------------------
 # Portfolio value over time — the equity curve
 # ---------------------------------------------------------------------------
 class PortfolioSnapshot(Base):
@@ -243,4 +284,118 @@ class Reflection(Base):
     reason: Mapped[str | None] = mapped_column(String, nullable=True)  # user's note
     # Ties the reflection back to the specific preview the user backed out of.
     preview_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+
+    # AI assessment of the learner's written reasoning. Rules cannot read free
+    # text at all, so this is entirely AI-provided. The classification is
+    # advisory: it never changes whether the warning counted as heeded, because
+    # backing out is good behaviour regardless of how well the learner justified it.
+    reasoning_class: Mapped[str | None] = mapped_column(String, nullable=True)
+    ai_response: Mapped[str | None] = mapped_column(String, nullable=True)
+    ai_citations: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    ai_mode: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+# ---------------------------------------------------------------------------
+# AI reasoning layer output — advisory, never scored
+# ---------------------------------------------------------------------------
+class AIFinding(Base):
+    """An advisory observation produced by the AI layer.
+
+    Kept in its own table, deliberately NOT in ``intervention_logs``. That
+    separation is the enforcement mechanism for the determinism boundary: the
+    Readiness Score reads only ``intervention_logs``, so no AI output can reach
+    scoring even by accident. ``source`` is stored anyway so the distinction
+    survives being serialised into an API response.
+    """
+
+    __tablename__ = "ai_findings"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    # Correlates with the trade preview that triggered the review, when there was one.
+    preview_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+
+    kind: Mapped[str] = mapped_column(String, index=True)  # "risk_review" | "pattern" | ...
+    severity: Mapped[str] = mapped_column(String, default="info")  # display ordering only
+    title: Mapped[str] = mapped_column(String)
+    body: Mapped[str] = mapped_column(String)
+    concept: Mapped[str | None] = mapped_column(String, nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String, nullable=True)
+    citations: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String, default="ai")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+
+class PatternAnalysis(Base):
+    """A cached whole-history behavioural analysis.
+
+    Regenerating this on every page load would be slow and wasteful, so the
+    record counts it was computed from are stored alongside it. If none of those
+    counts have changed, the cached analysis is still valid and no model call is
+    made.
+    """
+
+    __tablename__ = "pattern_analyses"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    patterns: Mapped[list] = mapped_column(JSON)
+    mode: Mapped[str] = mapped_column(String, default="offline")
+
+    # Cache-validity fingerprint.
+    txn_count: Mapped[int] = mapped_column(Integer, default=0)
+    resolved_intervention_count: Mapped[int] = mapped_column(Integer, default=0)
+    quiz_attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    reflection_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+
+class ChatSession(Base):
+    """A conversation with the grounded chatbot."""
+
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        back_populates="session", cascade="all,delete-orphan"
+    )
+
+
+class ChatMessage(Base):
+    """One turn. Citations are stored so an answer stays auditable later."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id"), index=True)
+    role: Mapped[str] = mapped_column(String)  # "user" | "assistant"
+    content: Mapped[str] = mapped_column(String)
+    citations: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    mode: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    session: Mapped[ChatSession] = relationship(back_populates="messages")
+
+
+class GeneratedQuestion(Base):
+    """An AI-generated quiz question, kept so attempts stay reproducible."""
+
+    __tablename__ = "generated_questions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    concept: Mapped[str] = mapped_column(String, index=True)
+    question: Mapped[str] = mapped_column(String)
+    options: Mapped[list] = mapped_column(JSON)
+    answer: Mapped[int] = mapped_column(Integer)
+    explanation: Mapped[str] = mapped_column(String)
+    citations: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

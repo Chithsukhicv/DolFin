@@ -98,3 +98,26 @@ class ReflectionCreate(BaseModel):
     # Identifies which preview was backed out of, so the right warnings get
     # credited as "heeded".
     preview_id: str | None = None
+
+
+# ----- adaptive quizzes ------------------------------------------------------
+class AdaptiveQuizSubmit(BaseModel):
+    """Submission for a quiz built by the generator.
+
+    ``question_ids`` echoes back the exact questions the learner was shown. The
+    server reads each correct answer from its own stored row, so the client never
+    holds the answer key.
+    """
+
+    user_id: str
+    concept: str
+    question_ids: list[str] = Field(min_length=1)
+    answers: list[int]
+
+
+# ----- chatbot ---------------------------------------------------------------
+class ChatAsk(BaseModel):
+    user_id: str
+    question: str = Field(min_length=1, max_length=500)
+    # Omit to start a new conversation.
+    session_id: str | None = None

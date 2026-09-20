@@ -64,14 +64,15 @@ class TestGraduationIsReachable:
     def test_disciplined_diversified_user_can_graduate(self, db, user, seeded_stocks):
         """The ramp must not make 80+ unreachable for genuinely good behaviour."""
         _goal(db, user)
-        # Spread across six sectors, no single position dominant.
+        # Eight distinct holdings across six sectors satisfies FULL_CONFIDENCE_HOLDINGS=8.
         for symbol, qty in [
             ("TCS.NS", 4), ("INFY.NS", 10), ("HDFCBANK.NS", 9),
-            ("SUNPHARMA.NS", 12), ("RELIANCE.NS", 11), ("ITC.NS", 37),
+            ("SUNPHARMA.NS", 12), ("RELIANCE.NS", 11), ("ITC.NS", 20),
+            ("TATASTEEL.NS", 5), ("NIFTYBEES.NS", 8),
         ]:
             portfolio_service.execute_buy(db, user, symbol, qty)
-        # Enough trades to reach full confidence.
-        for _ in range(3):
+        # Enough trades to reach full confidence on the trade axis.
+        for _ in range(2):
             portfolio_service.execute_buy(db, user, "ITC.NS", 1)
             portfolio_service.execute_buy(db, user, "INFY.NS", 1)
         for concept in ("diversification", "panic_selling", "long_term_thinking"):

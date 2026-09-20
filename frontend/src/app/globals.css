@@ -1,18 +1,298 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   DolFin — dark theme
+   ---------------------------------------------------------------------------
+   Rebuilt against the actual dark-mode rules rather than by eye. The first
+   attempt broke three of them and looked muddy as a result:
+
+   1. Background was #06070d — effectively black. Material's guidance is dark
+      grey, not black, because grey has the saturation to sit against bright
+      pixels and lets elevation read as "lighter" instead of "less black".
+   2. Accents were fully saturated (#6366f1, #22d3ee). Saturated hues on a dark
+      ground optically vibrate and lose contrast. Dark themes want the 200-300
+      tone of a hue, desaturated.
+   3. Muted text was #6b7591 on #10131f — about 3.5:1, under the 4.5:1 WCAG
+      minimum for body text. That is why everything read as washed out.
+
+   Semantic tones below are Google's 300-series, which exist specifically to hit
+   4.5:1 on a dark surface. Colour still carries meaning, not mood:
+
+     blue   -> product actions
+     purple -> anything the AI layer produced
+     green  -> gains, behaviour the learner got right
+     yellow -> caution, habits worth working on
+     red    -> losses, critical warnings
+--------------------------------------------------------------------------- */
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  color-scheme: dark;
+
+  /* Elevation scale. Each step is a real surface a card can sit on, so depth
+     comes from lightness rather than from drop shadows that dark themes swallow. */
+  --bg: #121418;
+  --elev-1: #1a1d23;
+  --elev-2: #21252d;
+  --elev-3: #282d36;
+  --elev-4: #2f3540;
+
+  --hairline: #2b3039;
+  --hairline-strong: #3a414e;
+
+  /* Off-white, not #fff. Pure white on dark causes halation. */
+  --fg: #e6e8ec;      /* ~13:1 on --bg */
+  --fg-muted: #b9bec9; /* ~8.6:1 */
+  --fg-subtle: #949aa6; /* ~5.4:1 — passes body text */
+  --fg-faint: #6f7684;  /* ~3.4:1 — decorative only, never body copy */
+
+  /* Accents: 300-tone, desaturated. Used for text, icons and borders. */
+  --brand: #8ab4f8;
+  --brand-dim: #5b8ee0;
+  --ai: #c58af9;
+  --pos: #81c995;
+  --neg: #f28b82;
+  --warn: #fdd663;
+
+  /* Solid fills that carry white text need to be darker than the 300 tone. */
+  --brand-fill: #3f5fbf;
+  --brand-fill-hover: #4a6dd4;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.55);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-elev-1: var(--elev-1);
+  --color-elev-2: var(--elev-2);
+  --color-elev-3: var(--elev-3);
+  --color-elev-4: var(--elev-4);
+  --color-surface: var(--elev-1);
+  --color-surface-muted: var(--bg);
+  --color-surface-hover: var(--elev-2);
+  --color-elevated: var(--elev-1);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+  --color-faint: var(--fg-faint);
+
+  --color-brand: var(--brand);
+  --color-ai: var(--ai);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-warn: var(--warn);
+
+  --font-sans: var(--font-sans-stack), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-stack), var(--font-sans-stack), sans-serif;
+  --font-mono: var(--font-mono-stack), ui-monospace, monospace;
 }
 
+* {
+  border-color: var(--hairline);
+}
+
+html { background: var(--bg); }
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------
+   Typography
+--------------------------------------------------------------------------- */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.022em;
+  color: var(--fg);
+}
+
+/* Tabular figures on anything that can change. Proportional digits make a price
+   ticking ₹1,299 -> ₹1,311 shift sideways, which reads as instability exactly
+   where a nervous beginner needs none. */
+.tnum, .metric, table td, table th {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.metric {
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Small caps label. Uses --fg-subtle, which passes 4.5:1, rather than the faint
+   tone — these are read, not decorative. */
+.label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+/* ---------------------------------------------------------------------------
+   Focus
+--------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   Surfaces
+   ---------------------------------------------------------------------------
+   Elevation by lightness, with a plain 1px hairline. The previous version used
+   gradient borders on every card, which at this density just read as noise.
+--------------------------------------------------------------------------- */
+.card {
+  background: var(--elev-1);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-sm);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.card-interactive:hover {
+  background: var(--elev-2);
+  border-color: var(--hairline-strong);
+}
+
+/* Raised panels — modals, the signup card. */
+.card-raised {
+  background: var(--elev-2);
+  border: 1px solid var(--hairline-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+.glass {
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+}
+
+/* Row hover inside lists and tables. Explicit, because a stray light-theme
+   `hover:bg-white` produced a blinding white band in a dark list. */
+.row-hover:hover {
+  background: var(--elev-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons
+--------------------------------------------------------------------------- */
+.btn-primary {
+  background: var(--brand-fill);
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  transition: background 140ms ease, transform 100ms ease;
+}
+.btn-primary:hover:not(:disabled) { background: var(--brand-fill-hover); }
+.btn-primary:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary:disabled { opacity: 0.45; }
+
+.btn-ghost {
+  background: var(--elev-2);
+  color: var(--fg);
+  border: 1px solid var(--hairline-strong);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--elev-3);
+  border-color: var(--brand-dim);
+}
+
+/* ---------------------------------------------------------------------------
+   Background texture
+   ---------------------------------------------------------------------------
+   One very faint grid, and nothing else. The earlier drifting aurora blobs are
+   gone: coloured haze behind a data table is the opposite of what a finance UI
+   needs, and it was what made the whole page look murky.
+--------------------------------------------------------------------------- */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.018) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.018) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+.hairline-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hairline-strong), transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   Motion — restrained, and all of it optional
+--------------------------------------------------------------------------- */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+.stagger > * { animation: rise-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 30ms; }
+.stagger > *:nth-child(2) { animation-delay: 70ms; }
+.stagger > *:nth-child(3) { animation-delay: 110ms; }
+.stagger > *:nth-child(4) { animation-delay: 150ms; }
+.stagger > *:nth-child(5) { animation-delay: 190ms; }
+.stagger > *:nth-child(6) { animation-delay: 230ms; }
+
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgb(129 201 149 / 0.4); }
+  70%  { box-shadow: 0 0 0 6px rgb(129 201 149 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(129 201 149 / 0); }
+}
+.live-dot { animation: pulse-ring 2.6s ease-out infinite; }
+
+/* Skeleton shimmer. A moving highlight reads as "loading" far more clearly than
+   a pulsing opacity, which is easily mistaken for a disabled control. */
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--elev-2);
+  border-radius: 6px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Scrollbar
+--------------------------------------------------------------------------- */
+@media (pointer: fine) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--hairline-strong);
+    border-radius: 99px;
+    border: 3px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #4a5260; }
+}
+
+::selection {
+  background: var(--brand-fill);
+  color: #fff;
 }

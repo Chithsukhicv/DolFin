@@ -36,6 +36,14 @@ class Intervention:
     concept: str | None = None  # e.g. "diversification", "sip", "loss_aversion"
     context: dict = field(default_factory=dict)
 
+    # The determinism boundary, made explicit on the wire.
+    #
+    # Rule findings feed the Readiness Score; AI findings never do. Once both
+    # kinds appear in the same UI, "which one was this?" stops being obvious from
+    # context alone — so the answer travels with the data rather than depending on
+    # which array a client happened to read it from.
+    SOURCE = "rule"
+
     def to_dict(self) -> dict:
         return {
             "rule_id": self.rule_id,
@@ -44,6 +52,7 @@ class Intervention:
             "message": self.message,
             "concept": self.concept,
             "context": _json_safe(self.context),
+            "source": self.SOURCE,
         }
 
 

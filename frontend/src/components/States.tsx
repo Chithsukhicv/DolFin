@@ -12,16 +12,16 @@ import { ApiError } from "@/lib/api";
 
 export function LoadingCard({ lines = 3 }: { lines?: number }) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="rounded-2xl border border-slate-200 bg-white p-5"
-    >
+    <div role="status" aria-live="polite" className="card rounded-2xl p-5">
       <span className="sr-only">Loading…</span>
       <div className="animate-pulse space-y-3">
-        <div className="h-4 w-1/3 rounded bg-slate-200" />
+        <div className="h-3.5 w-1/3 rounded bg-hairline-strong" />
         {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="h-3 rounded bg-slate-100" style={{ width: `${90 - i * 12}%` }} />
+          <div
+            key={i}
+            className="h-3 rounded bg-hairline"
+            style={{ width: `${90 - i * 12}%` }}
+          />
         ))}
       </div>
     </div>
@@ -44,21 +44,27 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800"
+      className="rounded-2xl border border-rose-500/25 bg-rose-500/[0.07] p-5 text-sm"
     >
-      <p className="font-medium">{offline ? "Can't reach the server" : label}</p>
-      <p className="mt-1 text-red-700">{message}</p>
+      <p className="font-semibold text-rose-200">
+        {offline ? "Can't reach the server" : label}
+      </p>
+      <p className="mt-1 text-rose-300/80">{message}</p>
       {offline && (
-        <p className="mt-2 text-xs text-red-600">
+        <p className="mt-2 text-xs text-rose-300/70">
           Start the backend with{" "}
-          <code className="rounded bg-red-100 px-1 py-0.5">uvicorn app.main:app --reload</code>{" "}
-          in the <code className="rounded bg-red-100 px-1 py-0.5">backend</code> folder.
+          <code className="rounded bg-rose-500/15 px-1.5 py-0.5 font-mono">
+            uvicorn app.main:app --reload
+          </code>{" "}
+          in the{" "}
+          <code className="rounded bg-rose-500/15 px-1.5 py-0.5 font-mono">backend</code>{" "}
+          folder.
         </p>
       )}
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+          className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20"
         >
           Try again
         </button>
@@ -77,9 +83,9 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-6 text-center">
-      <p className="font-medium text-slate-700">{title}</p>
-      {children && <div className="mt-1 text-sm text-slate-500">{children}</div>}
+    <div className="rounded-2xl border border-dashed border-hairline-strong bg-surface-muted/50 p-8 text-center">
+      <p className="font-display font-semibold text-fg">{title}</p>
+      {children && <div className="mt-1.5 text-sm text-subtle">{children}</div>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );
@@ -94,7 +100,7 @@ export function StaleBadge({ unavailable = false }: { unavailable?: boolean }) {
           ? "Live price unavailable — showing your average cost instead"
           : "Price served from cache; may be a few minutes old"
       }
-      className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800"
+      className="ml-1.5 rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-amber-300"
     >
       {unavailable ? "no price" : "delayed"}
     </span>

@@ -66,6 +66,10 @@ def interventions(
             "message": r.message,
             "concept": r.concept,
             "user_action": r.user_action,
+            # Everything in intervention_logs is a rule finding by construction —
+            # AI findings live in ai_findings precisely so they cannot end up here.
+            # Stated anyway so a client reading history never has to infer it.
+            "source": "rule",
             "created_at": r.created_at.isoformat(),
         }
         for r in rows

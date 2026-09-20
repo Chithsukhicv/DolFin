@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api, ApiError, type Intervention, type PreviewResult } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type Intervention,
+  type PreviewResult,
+  type ReflectionAnalysis,
+  type ReflectionResult,
+} from "@/lib/api";
 import { rupees, severityClasses } from "@/lib/format";
+import { AiFindingsPanel } from "@/components/AiFindingsPanel";
+import { AiBadge, AiDisclaimer, Citations } from "@/components/AiLabel";
 
 interface Props {
   userId: string;
@@ -28,6 +37,14 @@ export function InterventionModal({
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const heedRef = useRef<HTMLButtonElement>(null);
+
+  // Three views in one dialog: the warnings, then optionally the "why did you
+  // back out?" prompt, then the AI's read on what they wrote. Splitting these
+  // into separate modals would lose the context the learner is deciding in.
+  const [view, setView] = useState<"warnings" | "reflect" | "assessment">("warnings");
+  const [reason, setReason] = useState("");
+  const [assessment, setAssessment] = useState<ReflectionAnalysis | null>(null);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
 
   const itemsByConcept = new Map<string, Intervention>();
   for (const i of preview.interventions) {
@@ -93,27 +110,47 @@ export function InterventionModal({
     }
   }
 
-  async function heed() {
+  /** Record the cancellation. `note` is the learner's own words, if they wrote any. */
+  async function submitReflection(note: string) {
     setBusy(true);
     setError(null);
     try {
       // Same preview_id, opposite outcome: these warnings get credited as
-      // heeded, which is what raises the discipline sub-score.
-      await api.post("/reflections", {
+      // heeded, which is what raises the discipline sub-score. That happens
+      // regardless of what they wrote — backing out is good behaviour even if
+      // the reason they gave for it isn't.
+      const result = await api.post<ReflectionResult>("/reflections", {
         user_id: userId,
         symbol,
         side,
         quantity,
         preview_id: preview.preview_id,
         triggering_rule_ids: preview.interventions.map((i) => i.rule_id),
-        reason: "User cancelled trade after seeing the warnings",
+        reason: note.trim() || "User cancelled trade after seeing the warnings",
       });
-      onCancel();
+
+      if (result.analysis?.analysed && result.analysis.response) {
+        setAssessment(result.analysis);
+        setView("assessment");
+      } else {
+        onCancel();
+      }
     } catch (err) {
       setError(describe(err));
     } finally {
       setBusy(false);
     }
+  }
+
+  function heed() {
+    if (!hasWarnings) {
+      // Nothing fired, so there is nothing to reflect on. Don't make them type.
+      void submitReflection("");
+      return;
+    }
+    setView("reflect");
+    // Focus the textarea once it exists.
+    setTimeout(() => reasonRef.current?.focus(), 0);
   }
 
   const cost = preview.estimated_cost ?? preview.quote.price * quantity;
@@ -130,42 +167,43 @@ export function InterventionModal({
         aria-modal="true"
         aria-labelledby="coach-check-title"
         aria-describedby="coach-check-message"
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-elev-2 p-6 shadow-xl ring-1 ring-hairline-strong"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 id="coach-check-title" className="text-xl font-semibold">
+          <h2 id="coach-check-title" className="text-xl font-semibold text-white">
             Coach check —{" "}
-            <span className="capitalize">
-              {side} {quantity} {symbol}
-            </span>
+            <span className="capitalize">{side} {quantity} {symbol}</span>
           </h2>
-          <span className="whitespace-nowrap text-sm text-slate-500">
-            {rupees(cost)} approx.
-          </span>
+          <span className="whitespace-nowrap text-sm text-muted">{rupees(cost)} approx.</span>
         </div>
 
         {preview.quote.stale && (
-          <p
-            role="status"
-            className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
-          >
-            This price is from our cache because the live feed didn&apos;t respond. It may be
-            a few minutes old.
+          <p role="status" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            This price is from our cache because the live feed didn&apos;t respond. It may be a few minutes old.
           </p>
         )}
 
         {/* Coach summary first: this is the part learners actually read. */}
-        <div
-          id="coach-check-message"
-          className="mb-4 rounded-xl bg-indigo-50 p-4 text-sm text-indigo-900"
-        >
-          <strong className="mb-1 block">Your coach says:</strong>
+        <div id="coach-check-message" className="mb-4 rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-4 text-sm text-indigo-200">
+          <div className="mb-1 flex items-center gap-2">
+            <strong>Your coach says:</strong>
+            <AiBadge mode={preview.coach.mode} />
+          </div>
           {preview.coach.message}
+          {/* Only when a model actually wrote it — the offline message is a
+              deterministic template and labelling it as AI would be wrong. */}
+          {(preview.coach.mode === "generated" || preview.coach.mode === "cached") && (
+            <AiDisclaimer compact />
+          )}
         </div>
 
-        <div className="mb-4 space-y-3">
+        {view === "warnings" && (
+          <AiFindingsPanel previewId={preview.preview_id} userId={userId} />
+        )}
+
+        <div className={`mb-4 space-y-3 ${view === "warnings" ? "" : "hidden"}`}>
           {!hasWarnings ? (
-            <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            <p className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-300">
               No warnings on this trade.
             </p>
           ) : (
@@ -196,16 +234,13 @@ export function InterventionModal({
           )}
         </div>
 
-        {concepts.length > 0 && (
-          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+        {view === "warnings" && concepts.length > 0 && (
+          <div className="mb-4 rounded-xl border border-hairline-strong bg-elev-2 p-3 text-xs text-muted">
             Check your understanding — passing a quiz raises your Discipline score:
             <div className="mt-2 flex flex-wrap gap-2">
               {concepts.map((c) => (
-                <Link
-                  key={c}
-                  href={`/coach/quiz/${c}`}
-                  className="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200 hover:bg-slate-100"
-                >
+                <Link key={c} href={`/coach/quiz/${c}`}
+                  className="rounded-full border border-hairline-strong bg-elev-3 px-3 py-1 text-fg hover:border-brand hover:text-white">
                   {c.replaceAll("_", " ")} quiz →
                 </Link>
               ))}
@@ -213,36 +248,112 @@ export function InterventionModal({
           </div>
         )}
 
-        {error && (
-          <p role="alert" className="mb-3 text-sm text-red-600">
-            {error}
-          </p>
+        {/* Step two: their own words. This is the most valuable teaching moment
+            in the app — the difference between "the business hasn't changed" and
+            "it'll bounce back tomorrow" is the whole lesson, and no rule can
+            read either sentence. */}
+        {view === "reflect" && (
+          <div className="mb-4">
+            <label htmlFor="reflection-reason" className="mb-1 block text-sm font-medium text-fg">
+              Good call. Why are you backing out?
+            </label>
+            <p className="mb-2 text-xs text-subtle">
+              One line is enough. Writing it down turns a decision into a habit —
+              and your coach will tell you whether the reasoning holds up.
+            </p>
+            <textarea
+              id="reflection-reason"
+              ref={reasonRef}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              maxLength={1000}
+              placeholder="e.g. the company hasn't changed, only the price has"
+              className="w-full rounded-xl border border-hairline-strong bg-elev-3 p-3 text-sm text-fg placeholder:text-subtle focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+            <p className="mt-1 text-right text-xs text-subtle">{reason.length}/1000</p>
+          </div>
         )}
 
+        {/* Step three: what the coach made of it. */}
+        {view === "assessment" && assessment && (
+          <div className="mb-4">
+            <div className={`rounded-xl border p-4 text-sm ${
+                assessment.classification === "sound"
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                  : assessment.classification === "prediction_based"
+                    ? "border-amber-500/25 bg-amber-500/10 text-amber-200"
+                    : "border-hairline-strong bg-elev-3 text-fg"
+              }`}>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <strong>{REASONING_LABEL[assessment.classification ?? "partly_sound"]}</strong>
+                <AiBadge mode={assessment.mode} />
+              </div>
+              <p>{assessment.response}</p>
+              {assessment.citations && <Citations citations={assessment.citations} />}
+            </div>
+            <p className="mt-2 text-xs text-subtle">
+              Backing out already counted as heeding the warning. This read on your reasoning
+              is advisory — it doesn&apos;t change your score either way.
+            </p>
+            <AiDisclaimer compact />
+          </div>
+        )}
+
+        {error && <p role="alert" className="mb-3 text-sm text-neg">{error}</p>}
+
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
-            ref={heedRef}
-            onClick={heed}
-            disabled={busy}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {busy ? "Saving..." : hasWarnings ? "Cancel & reflect" : "Cancel"}
-          </button>
-          <button
-            onClick={confirm}
-            disabled={busy}
-            className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${
-              preview.blocking
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-indigo-600 hover:bg-indigo-700"
-            } disabled:opacity-50`}
-          >
-            {busy ? "Working..." : preview.blocking ? `Override and ${side}` : `Confirm ${side}`}
-          </button>
+          {view === "warnings" && (
+            <>
+              <button
+                ref={heedRef}
+                onClick={heed}
+                disabled={busy}
+                className="rounded-lg border border-hairline-strong bg-elev-3 px-4 py-2 text-sm font-medium text-fg hover:bg-elev-4 disabled:opacity-50"
+              >
+                {busy ? "Saving..." : hasWarnings ? "Cancel & reflect" : "Cancel"}
+              </button>
+              <button
+                onClick={confirm}
+                disabled={busy}
+                className={`rounded-lg px-4 py-2 text-sm font-medium text-white ${
+                  preview.blocking
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-brand-fill hover:bg-brand-fill-hover"
+                } disabled:opacity-50`}
+              >
+                {busy ? "Working..." : preview.blocking ? `Override and ${side}` : `Confirm ${side}`}
+              </button>
+            </>
+          )}
+
+          {view === "reflect" && (
+            <>
+              <button onClick={() => setView("warnings")} disabled={busy}
+                className="rounded-lg border border-hairline-strong bg-elev-3 px-4 py-2 text-sm font-medium text-fg hover:bg-elev-4 disabled:opacity-50">
+                Back
+              </button>
+              <button onClick={() => void submitReflection("")} disabled={busy}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-subtle hover:text-fg disabled:opacity-50">
+                Skip
+              </button>
+              <button onClick={() => void submitReflection(reason)} disabled={busy || reason.trim().length === 0}
+                className="rounded-lg bg-brand-fill px-4 py-2 text-sm font-medium text-white hover:bg-brand-fill-hover disabled:opacity-50">
+                {busy ? "Checking..." : "Save reason"}
+              </button>
+            </>
+          )}
+
+          {view === "assessment" && (
+            <button onClick={onCancel}
+              className="rounded-lg bg-brand-fill px-4 py-2 text-sm font-medium text-white hover:bg-brand-fill-hover">
+              Done
+            </button>
+          )}
         </div>
 
-        {preview.blocking && (
-          <p className="mt-3 text-xs text-slate-500">
+        {view === "warnings" && preview.blocking && (
+          <p className="mt-3 text-xs text-subtle">
             You can always override — this is practice money and the choice is yours. We just
             want the reasoning in front of you first.
           </p>
@@ -251,3 +362,9 @@ export function InterventionModal({
     </div>
   );
 }
+
+const REASONING_LABEL: Record<string, string> = {
+  sound: "That reasoning holds up",
+  partly_sound: "Partly there",
+  prediction_based: "Right call, shaky reason",
+};

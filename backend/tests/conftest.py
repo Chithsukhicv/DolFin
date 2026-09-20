@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.db import Base
 from app.models import Stock, User
 from app.services import market as market_service
@@ -78,6 +79,81 @@ def fake_market(monkeypatch):
     # quiet unless a test opts in.
     monkeypatch.setattr(market_service, "get_history", lambda *a, **k: None)
     return FAKE_PRICES
+
+
+@pytest.fixture(autouse=True)
+def fake_llm(monkeypatch):
+    """Replace the single network seam in the LLM gateway.
+
+    ``autouse`` so no test can accidentally reach the network — one forgotten
+    fixture would reintroduce flakiness, so this is on by default rather than
+    opt-in. Mirrors the ``fake_market`` pattern above.
+
+    By default the gateway reports *unavailable*, so every test exercises the
+    deterministic fallback path unless it opts in via the ``llm`` fixture below.
+
+    The key is blanked explicitly rather than relying on the environment not
+    having one. That distinction bit us: the suite passed only because no ``.env``
+    existed, and the moment a real key was added, every "behaves without a key"
+    test started seeing one — and the embedding ranker became willing to make real
+    network calls and spend real quota from a unit test.
+    """
+    from app.services import llm_gateway
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "", raising=False)
+    llm_gateway.reset_state()
+
+    def _refuse(prompt: str, *, timeout: float) -> str:
+        raise AssertionError(
+            "A test reached _call_model without opting in. Use the `llm` fixture."
+        )
+
+    def _refuse_embed(texts):
+        raise AssertionError(
+            "A test reached embed_texts without opting in. Embeddings are a network "
+            "call; assert on the lexical ranker or stub this explicitly."
+        )
+
+    monkeypatch.setattr(llm_gateway, "_call_model", _refuse)
+    # The second network seam. Guarded for the same reason as the first.
+    from app.services import ranking
+
+    monkeypatch.setattr(ranking, "embed_texts", _refuse_embed)
+    yield
+    llm_gateway.reset_state()
+
+
+@pytest.fixture
+def llm(monkeypatch):
+    """Opt in to a working stubbed LLM.
+
+    Returns a controller so a test can set the reply, force an error, or inspect
+    the prompts that were assembled.
+    """
+    from app.services import llm_gateway
+
+    class Controller:
+        def __init__(self) -> None:
+            self.reply = "A calm, plain-language explanation of the concern."
+            self.error: Exception | None = None
+            self.prompts: list[str] = []
+            self.calls = 0
+
+        def _call(self, prompt: str, *, timeout: float) -> str:
+            self.calls += 1
+            self.prompts.append(prompt)
+            if self.error is not None:
+                raise self.error
+            return self.reply
+
+    ctrl = Controller()
+    monkeypatch.setattr(llm_gateway, "_call_model", ctrl._call)
+    # A key must appear present for the gateway to attempt a call at all.
+    settings = get_settings()
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key", raising=False)
+    llm_gateway.reset_state()
+    return ctrl
 
 
 @pytest.fixture

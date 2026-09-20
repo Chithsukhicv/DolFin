@@ -7,8 +7,8 @@ import { Card, CardHeader } from "@/components/Card";
 import { ErrorState, LoadingCard } from "@/components/States";
 
 const DIFFICULTY_STYLES: Record<string, string> = {
-  beginner: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  intermediate: "bg-amber-50 text-amber-700 ring-amber-200",
+  beginner: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/25",
+  intermediate: "bg-amber-500/15 text-amber-300 ring-amber-500/25",
 };
 
 export default function LearnIndexPage() {
@@ -21,8 +21,8 @@ export default function LearnIndexPage() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Concept library</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+        <h1 className="text-2xl font-semibold text-white">Concept library</h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted">
           Every idea DolFin coaches you on, explained before you need it. Nothing here costs
           money or affects your portfolio — read in any order.
         </p>
@@ -36,7 +36,7 @@ export default function LearnIndexPage() {
           <Link
             key={c.key}
             href={`/learn/${c.key}`}
-            className="group rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-indigo-300 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="group rounded-2xl border border-hairline bg-surface p-5 transition hover:border-brand hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <div className="mb-2 flex items-center gap-2">
               <span
@@ -46,16 +46,12 @@ export default function LearnIndexPage() {
               >
                 {c.difficulty}
               </span>
-              <span className="text-xs text-slate-500">{c.read_minutes} min read</span>
+              <span className="text-xs text-subtle">{c.read_minutes} min read</span>
             </div>
-            <h2 className="font-semibold text-slate-900 group-hover:text-indigo-700">
-              {c.title}
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">{c.one_liner}</p>
+            <h2 className="font-semibold text-fg group-hover:text-brand">{c.title}</h2>
+            <p className="mt-1 text-sm text-muted">{c.one_liner}</p>
             {c.quiz && (
-              <p className="mt-3 text-xs font-medium text-indigo-600">
-                Includes a quiz →
-              </p>
+              <p className="mt-3 text-xs font-medium text-brand">Includes a quiz →</p>
             )}
           </Link>
         ))}
@@ -71,8 +67,8 @@ export default function LearnIndexPage() {
             <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
               {glossary.map((t) => (
                 <div key={t.term}>
-                  <dt className="text-sm font-medium text-slate-900">{t.label}</dt>
-                  <dd className="mt-0.5 text-sm text-slate-600">{t.definition}</dd>
+                  <dt className="text-sm font-semibold text-fg">{t.label}</dt>
+                  <dd className="mt-0.5 text-sm text-muted">{t.definition}</dd>
                 </div>
               ))}
             </dl>
