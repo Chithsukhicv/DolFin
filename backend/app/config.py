@@ -81,6 +81,17 @@ class Settings(BaseSettings):
     price_db_path: str = "./data/prices.db"
     price_refresh_interval_minutes: int = 15
 
+    # Corpus C — live market news (GNews API)
+    #
+    # GNews free tier: 100 requests/day. At the default 4-hour interval the app
+    # makes 6 requests/day, well inside the limit. Set to "" to disable GNews
+    # and fall back to the Google News RSS feed (no key required).
+    # Get a key at https://gnews.io — the free plan is sufficient for development.
+    gnews_api_key: str = ""
+    # How often to refresh live news. Every 4 hours keeps content fresh while
+    # staying inside GNews free-tier limits. Raise only with a paid plan.
+    news_fetch_interval_hours: int = 4
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
