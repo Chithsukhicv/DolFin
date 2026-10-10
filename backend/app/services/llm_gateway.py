@@ -58,13 +58,18 @@ class FeatureSpec:
 # TTLs follow R14.7: 15 minutes for trade-time features, 24 hours for analyses
 # that only change when the learner's history changes.
 FEATURES: dict[str, FeatureSpec] = {
-    "coach":       FeatureSpec(cache_ttl_seconds=900,    interactive=True),
-    "risk_review": FeatureSpec(cache_ttl_seconds=900,    interactive=True),
-    "reflection":  FeatureSpec(cache_ttl_seconds=900,    interactive=True,  untrusted_char_limit=1000),
-    "chatbot":     FeatureSpec(cache_ttl_seconds=900,    interactive=True,  untrusted_char_limit=500),
-    "pattern":     FeatureSpec(cache_ttl_seconds=86_400, interactive=False),
-    "quiz_gen":    FeatureSpec(cache_ttl_seconds=86_400, interactive=False),
-    "path":        FeatureSpec(cache_ttl_seconds=900,    interactive=False),
+    "coach":          FeatureSpec(cache_ttl_seconds=900,    interactive=True),
+    "risk_review":    FeatureSpec(cache_ttl_seconds=900,    interactive=True),
+    "reflection":     FeatureSpec(cache_ttl_seconds=900,    interactive=True,  untrusted_char_limit=1000),
+    "chatbot":        FeatureSpec(cache_ttl_seconds=900,    interactive=True,  untrusted_char_limit=500),
+    "pattern":        FeatureSpec(cache_ttl_seconds=86_400, interactive=False),
+    "quiz_gen":       FeatureSpec(cache_ttl_seconds=86_400, interactive=False),
+    "path":           FeatureSpec(cache_ttl_seconds=900,    interactive=False),
+    # Market Movement Predictor: combines ML forecast + behavioural context +
+    # RAG into an educational commentary.  Not on a user-blocking path so it
+    # gets the longer deferred timeout.  1-hour TTL reflects intraday price
+    # changes without hammering the model on every page refresh.
+    "market_insight": FeatureSpec(cache_ttl_seconds=3_600,  interactive=False),
 }
 
 _DEFAULT_SPEC = FeatureSpec(cache_ttl_seconds=900, interactive=True)

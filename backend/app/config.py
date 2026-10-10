@@ -81,6 +81,31 @@ class Settings(BaseSettings):
     price_db_path: str = "./data/prices.db"
     price_refresh_interval_minutes: int = 15
 
+    # Market Movement Predictor
+    #
+    # model artifacts are written here (resolved relative to project_root).
+    # The directory is .gitignore-covered so trained files never enter version
+    # control — see .gitignore for the matching pattern.
+    market_ml_model_dir: str = "./data/models"
+
+    # Return thresholds that define UP / DOWN vs SIDEWAYS for each horizon.
+    # A 1-day move of ±1 % counts as directional; longer windows use wider bands
+    # because prices have more room to drift without a genuine trend forming.
+    market_ml_return_threshold_1d: float = 0.01    # ±1.0 % for 1-day horizon
+    market_ml_return_threshold_3d: float = 0.015   # ±1.5 % for 3-day horizon
+    market_ml_return_threshold_5d: float = 0.02    # ±2.0 % for 5-day horizon
+    market_ml_return_threshold_10d: float = 0.025  # ±2.5 % for 10-day horizon
+
+    # A model artifact older than this many days is flagged as stale in the
+    # HorizonForecast response. Stale probabilities are still returned; the
+    # client decides whether to surface the warning.
+    market_ml_staleness_days: int = 7
+
+    # Minimum number of complete feature-vector rows (after NaN drop) required
+    # for the predictor to return probabilities. Below this the response carries
+    # model_status="insufficient_history" instead of guessing.
+    market_ml_min_history_bars: int = 60
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

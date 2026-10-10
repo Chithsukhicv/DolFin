@@ -17,6 +17,7 @@ from app.routers import (
     history,
     learn,
     market,
+    market_ml,
     portfolio,
     quizzes,
     readiness,
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(learn.router)
     app.include_router(coach.router)
     app.include_router(chat.router)
+    app.include_router(market_ml.router)
 
     return app
 

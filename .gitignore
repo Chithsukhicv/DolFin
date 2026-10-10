@@ -43,3 +43,12 @@ backend/data/*.sqlite
 backend/data/*.sqlite3
 backend/logs/
 *.log
+
+# Market Movement Predictor — model artifacts (regenerate with training script)
+# These are intentionally excluded: trained models can be large and are fully
+# reproducible from the training script + live market data.
+backend/data/models/
+*.joblib
+# Training datasets (downloaded OHLCV CSVs, if any)
+backend/data/*.csv
+backend/data/*.parquet
