@@ -46,4 +46,14 @@ backend/data/*.sqlite3
 backend/logs/
 *.log
 
+*.log
+
 /backend/firebase-adminsdk.json
+
+# Market Movement Predictor — model artifacts
+backend/data/models/
+*.joblib
+
+# Training datasets
+backend/data/*.csv
+backend/data/*.parquet
