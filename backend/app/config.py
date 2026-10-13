@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -80,6 +80,37 @@ class Settings(BaseSettings):
     # Price cache
     price_db_path: str = "./data/prices.db"
     price_refresh_interval_minutes: int = 15
+
+    # Readiness Score V2 weights. Defaults are the reviewed proposal and are
+    # validated together so a partial environment override cannot skew scores.
+    readiness_weight_diversification: float = 0.25
+    readiness_weight_discipline: float = 0.25
+    readiness_weight_goal_alignment: float = 0.15
+    readiness_weight_autonomy: float = 0.10
+    readiness_weight_consistency: float = 0.15
+    readiness_weight_engagement: float = 0.10
+    readiness_ml_blend_weight: float = 0.50
+    readiness_ml_blend_dimensions: str = "discipline,autonomy"
+
+    @model_validator(mode="after")
+    def _readiness_weight_ranges(self):
+        weights = (
+            self.readiness_weight_diversification,
+            self.readiness_weight_discipline,
+            self.readiness_weight_goal_alignment,
+            self.readiness_weight_autonomy,
+            self.readiness_weight_consistency,
+            self.readiness_weight_engagement,
+        )
+        if any(weight < 0 or weight > 1 for weight in weights) or not abs(sum(weights) - 1.0) < 1e-8:
+            raise ValueError("Readiness dimension weights must be between 0 and 1 and sum to 1")
+        if not 0 <= self.readiness_ml_blend_weight <= 1:
+            raise ValueError("READINESS_ML_BLEND_WEIGHT must be between 0 and 1")
+        allowed = {"diversification", "discipline", "goal_alignment", "autonomy", "consistency", "engagement"}
+        configured = {item.strip() for item in self.readiness_ml_blend_dimensions.split(",") if item.strip()}
+        if not configured <= allowed:
+            raise ValueError("READINESS_ML_BLEND_DIMENSIONS contains an unknown dimension")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:
