@@ -4,6 +4,13 @@ import { useEffect } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const DashboardScene = dynamic(
+  () => import("@/components/three/DashboardScene").then((m) => m.DashboardScene),
+  { ssr: false }
+);
 import {
   fetcher,
   type Portfolio,
@@ -103,10 +110,12 @@ export default function DashboardPage() {
         {/* Readiness badge floating right */}
         {scoreActive && (
           <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 flex-col items-center lg:flex">
-            <ReadinessGauge score={scoreValue} size={80} />
-            <p className="mt-1 text-[10px] font-medium uppercase tracking-widest text-subtle">
-              Readiness
-            </p>
+            <WebGLCanvas
+              className="h-[220px] w-[220px]"
+              camera={{ position: [0, 0, 6], fov: 55 }}
+            >
+              <DashboardScene score={scoreValue} />
+            </WebGLCanvas>
           </div>
         )}
       </header>
@@ -176,6 +185,36 @@ export default function DashboardPage() {
           href="/readiness"
         />
       </div>
+
+      {/* ── 3D Readiness Instrument ── */}
+      {scoreActive && (
+        <div className="relative overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-[#0D1220] to-[#080B12]">
+          <div className="flex flex-col items-center justify-between gap-4 p-4 md:flex-row">
+            <div className="z-10 flex-1 md:pl-4">
+              <p className="label mb-1 text-brand">Investment Readiness</p>
+              <h2 className="font-display text-2xl font-bold text-white">
+                Score: {scoreValue.toFixed(0)} / 100
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {readiness?.graduated
+                  ? "🎓 Graduated — ready for real money"
+                  : readiness?.provisional
+                  ? "Provisional — keep trading to build confidence"
+                  : "Keep practising to raise your score"}
+              </p>
+              <Link href="/readiness" className="mt-3 inline-block text-sm text-brand hover:underline">
+                Full breakdown →
+              </Link>
+            </div>
+            <WebGLCanvas
+              className="h-[260px] w-full md:w-[260px]"
+              camera={{ position: [0, 0, 6], fov: 55 }}
+            >
+              <DashboardScene score={scoreValue} />
+            </WebGLCanvas>
+          </div>
+        </div>
+      )}
 
       {/* ── Equity curve ── */}
       <Card>

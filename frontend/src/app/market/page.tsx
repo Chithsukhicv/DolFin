@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
+import dynamic from "next/dynamic";
 import { api, fetcher, type PreviewResult, type Quote, type Stock } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { rupees, pct } from "@/lib/format";
@@ -10,6 +11,12 @@ import { InterventionModal } from "@/components/InterventionModal";
 import { PriceChart } from "@/components/PriceChart";
 import { ErrorState, StaleBadge } from "@/components/States";
 import Link from "next/link";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const MarketScene = dynamic(
+  () => import("@/components/three/MarketScene").then((m) => m.MarketScene),
+  { ssr: false }
+);
 
 const RISK_STYLES: Record<string, string> = {
   low:    "bg-pos/12 text-pos border-pos/25",
@@ -44,6 +51,19 @@ export default function MarketPage() {
       {/* ── Stock list ── */}
       <div className="space-y-4">
         <h1 className="font-display text-2xl font-bold text-white">Market</h1>
+
+        {/* 3D Market visualization — decorative */}
+        <div className="relative overflow-hidden rounded-2xl border border-hairline">
+          <WebGLCanvas
+            className="h-[160px] w-full"
+            camera={{ position: [0, 3.5, 4], fov: 55 }}
+          >
+            <MarketScene />
+          </WebGLCanvas>
+          <div className="absolute bottom-2 right-3 rounded bg-black/50 px-2 py-0.5 text-[10px] text-subtle backdrop-blur-sm">
+            Visualisation only — not real market data
+          </div>
+        </div>
 
         {stocksError && <ErrorState error={stocksError} label="Couldn't load the catalogue" />}
 

@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { api, ApiError, type GoalTemplate, type User } from "@/lib/api";
 import { getUserId, setUserId } from "@/lib/session";
 import { Hero } from "@/components/Hero";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const HeroScene = dynamic(
+  () => import("@/components/three/HeroScene").then((m) => m.HeroScene),
+  { ssr: false }
+);
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -113,6 +120,28 @@ export default function OnboardingPage() {
 
   return (
     <div className="-my-8 py-10">
+      {/* ── 3D Hero Section ── */}
+      <div className="relative mb-8 overflow-hidden rounded-3xl border border-hairline bg-[#080B12]">
+        <WebGLCanvas
+          className="h-[420px] w-full md:h-[500px]"
+          camera={{ position: [0, 0, 5.5], fov: 60 }}
+        >
+          <HeroScene />
+        </WebGLCanvas>
+        {/* Text overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-6">
+          <div className="pointer-events-auto">
+            <p className="label mb-3 text-brand">Paper trading · Live NSE prices</p>
+            <h1 className="font-display text-5xl font-black tracking-tight text-white md:text-6xl">
+              DolFin
+            </h1>
+            <p className="mt-3 max-w-md text-lg text-muted">
+              Learn to invest without losing real money.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <Hero />
 
       <div className="hairline-gradient my-16" />

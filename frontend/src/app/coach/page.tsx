@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
+import dynamic from "next/dynamic";
 import { fetcher, type ConceptProgress, type InterventionLogItem } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
@@ -10,6 +11,12 @@ import { PatternPanel } from "@/components/PatternPanel";
 import { ReflectionHistory } from "@/components/ReflectionHistory";
 import { RetestPanel } from "@/components/RetestPanel";
 import { severityClasses } from "@/lib/format";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const CoachOrbScene = dynamic(
+  () => import("@/components/three/CoachOrbScene").then((m) => m.CoachOrbScene),
+  { ssr: false }
+);
 
 export default function CoachPage() {
   const userId = useRequireUser();
@@ -27,11 +34,19 @@ export default function CoachPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
-        <p className="mt-1 text-sm text-muted">
-          Every warning the coach fired and what you did with it.
-        </p>
+      <header className="flex items-center gap-5">
+        <WebGLCanvas
+          className="h-[90px] w-[90px] shrink-0"
+          camera={{ position: [0, 0, 3.5], fov: 50 }}
+        >
+          <CoachOrbScene isThinking={false} />
+        </WebGLCanvas>
+        <div>
+          <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
+          <p className="mt-1 text-sm text-muted">
+            Every warning the coach fired and what you did with it.
+          </p>
+        </div>
       </header>
 
       <PatternPanel userId={userId} />

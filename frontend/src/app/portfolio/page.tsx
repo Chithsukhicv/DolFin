@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
+import dynamic from "next/dynamic";
 import {
   api,
   fetcher,
@@ -17,6 +18,12 @@ import { EmptyState, ErrorState, LoadingCard, StaleBadge } from "@/components/St
 import { Term } from "@/components/Term";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import Link from "next/link";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const PortfolioScene = dynamic(
+  () => import("@/components/three/PortfolioScene").then((m) => m.PortfolioScene),
+  { ssr: false }
+);
 
 const SECTOR_COLOURS = [
   "#6C63FF", "#40D9FF", "#00D6A0", "#f59e0b", "#ef4444",
@@ -84,51 +91,44 @@ export default function PortfolioPage() {
         </p>
       )}
 
-      {/* Allocation donut + holdings table */}
+      {/* 3D Allocation scene + 2D fallback */}
       {pf && sectorData.length > 0 && (
         <Card>
           <CardHeader
-            title="Allocation"
-            subtitle="How your portfolio is spread across sectors"
+            title="Portfolio allocation"
+            subtitle="Hover a segment to inspect. 3D extruded geometry — each wedge has real depth."
           />
-          <div className="flex flex-wrap items-center gap-8">
-            <div className="h-52 w-52 shrink-0">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={sectorData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={52}
-                    outerRadius={82}
-                    stroke="rgba(255,255,255,0.05)"
-                    strokeWidth={2}
-                    paddingAngle={3}
-                  >
-                    {sectorData.map((_, i) => (
-                      <Cell key={i} fill={SECTOR_COLOURS[i % SECTOR_COLOURS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v) => [`${Number(v).toFixed(1)}%`, "Allocation"]}
-                    contentStyle={{
-                      background: "var(--elev-3)",
-                      border: "1px solid var(--hairline-strong)",
-                      borderRadius: 10,
-                      color: "var(--fg)",
-                      fontSize: 12,
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="flex flex-wrap items-center gap-6">
+            {/* 3D scene primary */}
+            <WebGLCanvas
+              className="h-[300px] w-full rounded-xl md:w-[300px]"
+              camera={{ position: [0, 4, 5], fov: 50 }}
+              fallback={
+                <div className="h-[300px] w-full md:w-[300px]">
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie data={sectorData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} stroke="rgba(255,255,255,0.05)" strokeWidth={2} paddingAngle={3}>
+                        {sectorData.map((_, i) => <Cell key={i} fill={SECTOR_COLOURS[i % SECTOR_COLOURS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v) => [`${Number(v).toFixed(1)}%`, "Allocation"]} contentStyle={{ background: "var(--elev-3)", border: "1px solid var(--hairline-strong)", borderRadius: 10, color: "var(--fg)", fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              }
+            >
+              <PortfolioScene
+                sectors={sectorData.map((s, i) => ({
+                  name: s.name,
+                  value: s.value,
+                  color: SECTOR_COLOURS[i % SECTOR_COLOURS.length],
+                }))}
+              />
+            </WebGLCanvas>
+            {/* Legend */}
             <ul className="flex-1 space-y-2 text-sm">
               {sectorData.map((s, i) => (
                 <li key={s.name} className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: SECTOR_COLOURS[i % SECTOR_COLOURS.length] }}
-                  />
+                  <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: SECTOR_COLOURS[i % SECTOR_COLOURS.length] }} />
                   <span className="flex-1 text-muted">{s.name}</span>
                   <span className="font-mono text-xs font-semibold text-fg">{pct(s.value, 1)}</span>
                 </li>

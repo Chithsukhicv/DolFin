@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
+import dynamic from "next/dynamic";
 import {
   api,
   fetcher,
@@ -10,6 +11,12 @@ import {
 } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const ScenarioScene = dynamic(
+  () => import("@/components/three/ScenarioScene").then((m) => m.ScenarioScene),
+  { ssr: false }
+);
 
 /* Colour config per scenario kind */
 const SCENARIO_STYLES: Record<string, {
@@ -127,6 +134,27 @@ export default function ScenariosPage() {
           Practise reacting to crashes, rallies and sideways markets — without losing real money.
         </p>
       </header>
+
+      {/* ── 3D Scenario visualization ── */}
+      <div className="relative overflow-hidden rounded-2xl border border-hairline">
+        <WebGLCanvas
+          className="h-[200px] w-full"
+          camera={{ position: [0, 0, 4.5], fov: 55 }}
+        >
+          <ScenarioScene
+            kind={
+              active?.is_active
+                ? (active.kind?.toLowerCase() as "crash" | "bull" | "correction" | "sideways" | "bear" | null)
+                : null
+            }
+          />
+        </WebGLCanvas>
+        {active?.is_active && (
+          <div className="absolute bottom-2 left-3 rounded bg-black/60 px-2 py-0.5 text-xs font-semibold backdrop-blur-sm" style={{ color: "#FF6B6B" }}>
+            {active.kind} scenario active
+          </div>
+        )}
+      </div>
 
       {/* ── Active scenario ── */}
       {active?.is_active && activeStyle && (

@@ -2,10 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import dynamic from "next/dynamic";
 import { ai, ApiError, type ChatAnswer, type ChatMessage } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
 import { AiBadge, AiDisclaimer, Citations } from "@/components/AiLabel";
+import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+
+const CoachOrbScene = dynamic(
+  () => import("@/components/three/CoachOrbScene").then((m) => m.CoachOrbScene),
+  { ssr: false }
+);
 
 const SUGGESTIONS = [
   "What is a P/E ratio?",
@@ -100,9 +107,14 @@ export default function AskPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header with orb ── */}
-      <header className="flex items-center gap-4">
-        <AssistantOrb />
+      {/* ── Header with 3D orb ── */}
+      <header className="flex items-center gap-5">
+        <WebGLCanvas
+          className="h-[100px] w-[100px] shrink-0"
+          camera={{ position: [0, 0, 3.5], fov: 50 }}
+        >
+          <CoachOrbScene isThinking={busy} />
+        </WebGLCanvas>
         <div>
           <h1 className="font-display text-2xl font-bold text-white">Ask DolFin</h1>
           <p className="mt-0.5 text-sm text-muted">
@@ -275,38 +287,5 @@ export default function AskPage() {
   );
 }
 
-/* ── Assistant orb decoration ── */
-function AssistantOrb() {
-  return (
-    <div className="relative flex h-12 w-12 shrink-0 items-center justify-center" aria-hidden>
-      {/* Outer glow ring */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand/30 to-ai/20 ai-orb" />
-      {/* Spinning ring */}
-      <svg
-        className="absolute inset-0 ai-orb-ring"
-        width="48" height="48" viewBox="0 0 48 48"
-        fill="none"
-      >
-        <circle
-          cx="24" cy="24" r="22"
-          stroke="url(#orbGrad)"
-          strokeWidth="1"
-          strokeDasharray="8 4"
-          opacity="0.5"
-        />
-        <defs>
-          <linearGradient id="orbGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#6C63FF" />
-            <stop offset="1" stopColor="#40D9FF" />
-          </linearGradient>
-        </defs>
-      </svg>
-      {/* Core */}
-      <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand to-ai text-white shadow-lg">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-        </svg>
-      </div>
-    </div>
-  );
-}
+
+
