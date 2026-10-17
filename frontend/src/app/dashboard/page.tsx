@@ -25,11 +25,11 @@ import {
 } from "recharts";
 
 const SECTOR_COLOURS = [
-  "#6366f1",
-  "#10b981",
+  "#6C63FF",
+  "#40D9FF",
+  "#00D6A0",
   "#f59e0b",
   "#ef4444",
-  "#0ea5e9",
   "#a855f7",
   "#14b8a6",
   "#f97316",
@@ -48,7 +48,6 @@ export default function DashboardPage() {
     fetcher,
   );
 
-  // If the cached user ID no longer exists in the backend, kick back to /
   useEffect(() => {
     if (userError) {
       router.replace("/");
@@ -80,111 +79,105 @@ export default function DashboardPage() {
       }))
     : [];
 
+  const pnlUp = (pf?.unrealised_pnl ?? 0) >= 0;
+  const scoreActive = readiness?.is_active;
+  const scoreValue = readiness?.score ?? 0;
+
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">
-          Hi {user?.display_name || "there"} 👋
-        </h1>
-        <p className="text-sm text-slate-500">
-          Practising as <span className="font-medium capitalize">{user?.persona}</span>{" "}
-          · risk: <span className="font-medium capitalize">{user?.risk_appetite}</span>
-        </p>
+      {/* ── Hero header ── */}
+      <header className="relative overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-[#0D1220] to-[#0a0d16] p-6">
+        <div className="aurora" aria-hidden />
+        <div className="relative z-10">
+          <p className="label mb-1">Welcome back</p>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-white">
+            Hi {user?.display_name || "there"} 👋
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            Practising as{" "}
+            <span className="font-medium capitalize text-fg">{user?.persona}</span>
+            {" · "}risk:{" "}
+            <span className="font-medium capitalize text-fg">{user?.risk_appetite}</span>
+          </p>
+        </div>
+        {/* Readiness badge floating right */}
+        {scoreActive && (
+          <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 flex-col items-center lg:flex">
+            <ReadinessGauge score={scoreValue} size={80} />
+            <p className="mt-1 text-[10px] font-medium uppercase tracking-widest text-subtle">
+              Readiness
+            </p>
+          </div>
+        )}
       </header>
 
-      {/* The single most useful thing on this page for a beginner: what to do next. */}
+      {/* ── Learning path nudge ── */}
       <LearningPath userId={userId} compact />
 
+      {/* ── Stale price warning ── */}
       {pf && pf.stale_price_count > 0 && (
         <p
           role="status"
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          className="rounded-xl border border-warn/30 bg-warn/8 px-4 py-3 text-sm text-warn"
         >
           {pf.stale_price_count === 1
             ? "One holding is priced from cache"
             : `${pf.stale_price_count} holdings are priced from cache`}{" "}
-          because the live market feed didn&apos;t respond. Values may be slightly behind.
+          — values may be slightly behind.
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-slate-500">
-            Total portfolio value
-          </p>
-          <p className="mt-1 text-3xl font-semibold">
-            {pf ? rupees(pf.total_value) : "—"}
-          </p>
-          {pf && (
-            <p
-              className={`mt-1 text-sm ${
-                pf.unrealised_pnl >= 0 ? "text-emerald-600" : "text-red-600"
-              }`}
-            >
-              Unrealised P&amp;L: {rupees(pf.unrealised_pnl)}
-            </p>
-          )}
-        </Card>
-
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Cash</p>
-          <p className="mt-1 text-3xl font-semibold">
-            {pf ? rupees(pf.cash) : "—"}
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            Invested: {pf ? rupees(pf.invested) : "—"}
-          </p>
-        </Card>
-
-        <Card>
-          <p className="text-xs uppercase tracking-wide text-slate-500">
-            Investment Readiness
-          </p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <p className="text-3xl font-semibold">
-              {readiness ? (readiness.is_active ? readiness.score.toFixed(0) : "—") : "—"}
-            </p>
-            <p className="text-sm text-slate-500">/ 100</p>
-          </div>
-          {readiness && !readiness.is_active ? (
-            <p className="mt-1 text-xs text-slate-500">
-              Make your first trade to start tracking
-            </p>
-          ) : (
-            <>
-              {/* A score built on two trades is a guess, and presenting it as
-                  final would mislead exactly the people we're trying to help. */}
-              {readiness?.provisional && (
-                <p className="mt-1 text-xs text-amber-700">
-                  Provisional —{" "}
-                  {readiness.evidence_needed.trades > 0 && (
-                    <>{readiness.evidence_needed.trades} more trades</>
-                  )}
-                  {readiness.evidence_needed.trades > 0 &&
-                    readiness.evidence_needed.holdings > 0 &&
-                    " and "}
-                  {readiness.evidence_needed.holdings > 0 && (
-                    <>{readiness.evidence_needed.holdings} more holdings</>
-                  )}{" "}
-                  for a confident score
-                </p>
-              )}
-              <Link
-                href="/readiness"
-                className="mt-1 inline-block text-sm text-indigo-600 hover:underline"
-              >
-                View breakdown →
-              </Link>
-            </>
-          )}
-          {readiness?.graduated && (
-            <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-              ⭐ Graduated — ready for real money
-            </p>
-          )}
-        </Card>
+      {/* ── Metric cards ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Total value"
+          value={pf ? rupees(pf.total_value) : "—"}
+          delta={pf ? `${pnlUp ? "+" : ""}${pct(pf.unrealised_pnl / (pf.total_value || 1))}` : undefined}
+          tone={pnlUp ? "positive" : "negative"}
+          hint="portfolio + cash"
+        />
+        <MetricCard
+          label="Unrealised P&L"
+          value={pf ? rupees(pf.unrealised_pnl) : "—"}
+          tone={(pf?.unrealised_pnl ?? 0) >= 0 ? "positive" : "negative"}
+          hint="on open positions"
+        />
+        <MetricCard
+          label="Cash available"
+          value={pf ? rupees(pf.cash) : "—"}
+          hint={pf ? `Invested: ${rupees(pf.invested)}` : undefined}
+        />
+        <MetricCard
+          label="Readiness"
+          value={
+            scoreActive
+              ? `${scoreValue.toFixed(0)}`
+              : "—"
+          }
+          suffix={scoreActive ? "/100" : undefined}
+          hint={
+            scoreActive
+              ? readiness?.provisional
+                ? "Provisional score"
+                : readiness?.graduated
+                ? "Graduated 🎓"
+                : `Target: ${readiness?.graduation_threshold ?? 80}+`
+              : "Make your first trade"
+          }
+          tone={
+            !scoreActive
+              ? "neutral"
+              : scoreValue >= 80
+              ? "positive"
+              : scoreValue < 40
+              ? "negative"
+              : "neutral"
+          }
+          href="/readiness"
+        />
       </div>
 
+      {/* ── Equity curve ── */}
       <Card>
         <CardHeader
           title="Portfolio value over time"
@@ -193,31 +186,29 @@ export default function DashboardPage() {
         <EquityCurve userId={userId} />
       </Card>
 
+      {/* ── Sector allocation + Recent activity ── */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader
             title="Sector allocation"
             subtitle="Spread across sectors lowers single-industry risk"
             right={
-              <Link
-                href="/portfolio"
-                className="text-sm text-indigo-600 hover:underline"
-              >
+              <Link href="/portfolio" className="text-sm text-brand hover:underline">
                 Holdings →
               </Link>
             }
           />
           {sectorData.length === 0 ? (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted">
               No holdings yet. Buy your first stock from the{" "}
-              <Link href="/market" className="text-indigo-600 hover:underline">
+              <Link href="/market" className="text-brand hover:underline">
                 Market page
               </Link>
               .
             </p>
           ) : (
             <div className="flex items-center gap-6">
-              <div className="h-48 w-48">
+              <div className="h-48 w-48 shrink-0">
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie
@@ -226,8 +217,9 @@ export default function DashboardPage() {
                       nameKey="name"
                       innerRadius={45}
                       outerRadius={75}
-                      stroke="white"
+                      stroke="rgba(255,255,255,0.06)"
                       strokeWidth={2}
+                      paddingAngle={2}
                     >
                       {sectorData.map((_, i) => (
                         <Cell
@@ -237,22 +229,29 @@ export default function DashboardPage() {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(v) => `${Number(v).toFixed(1)}%`}
+                      formatter={(v) => [`${Number(v).toFixed(1)}%`, "Allocation"]}
+                      contentStyle={{
+                        background: "var(--elev-3)",
+                        border: "1px solid var(--hairline-strong)",
+                        borderRadius: 10,
+                        color: "var(--fg)",
+                        fontSize: 12,
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <ul className="flex-1 space-y-1 text-sm">
+              <ul className="flex-1 space-y-1.5 text-sm">
                 {sectorData.map((s, i) => (
                   <li key={s.name} className="flex items-center gap-2">
                     <span
-                      className="inline-block h-2.5 w-2.5 rounded-full"
-                      style={{
-                        backgroundColor: SECTOR_COLOURS[i % SECTOR_COLOURS.length],
-                      }}
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: SECTOR_COLOURS[i % SECTOR_COLOURS.length] }}
                     />
-                    <span className="flex-1">{s.name}</span>
-                    <span className="font-medium">{pct(s.value, 1)}</span>
+                    <span className="flex-1 truncate text-muted">{s.name}</span>
+                    <span className="font-mono text-xs font-medium text-fg">
+                      {pct(s.value, 1)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -264,42 +263,156 @@ export default function DashboardPage() {
           <CardHeader
             title="Recent activity"
             right={
-              <Link
-                href="/coach"
-                className="text-sm text-indigo-600 hover:underline"
-              >
+              <Link href="/coach" className="text-sm text-brand hover:underline">
                 See all →
               </Link>
             }
           />
           {txns && txns.length > 0 ? (
-            <ul className="divide-y divide-slate-100 text-sm">
+            <ul className="divide-y divide-hairline text-sm">
               {txns.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-center justify-between py-2"
-                >
-                  <span>
+                <li key={t.id} className="flex items-center justify-between py-2.5">
+                  <div className="flex items-center gap-2.5">
                     <span
-                      className={`mr-2 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                         t.side === "buy"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-red-100 text-red-700"
+                          ? "bg-pos/15 text-pos"
+                          : "bg-neg/15 text-neg"
                       }`}
                     >
                       {t.side}
                     </span>
-                    {t.quantity} {t.symbol}
-                  </span>
-                  <span className="text-slate-600">{rupees(t.price)}</span>
+                    <span className="text-fg">
+                      {t.quantity} × {t.symbol}
+                    </span>
+                  </div>
+                  <span className="font-mono text-sm text-muted">{rupees(t.price)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-slate-500">No trades yet.</p>
+            <p className="text-sm text-muted">No trades yet.</p>
           )}
         </Card>
       </div>
     </div>
+  );
+}
+
+/* ── Inline metric card ── */
+function MetricCard({
+  label,
+  value,
+  delta,
+  suffix,
+  hint,
+  tone = "neutral",
+  href,
+}: {
+  label: string;
+  value: string;
+  delta?: string;
+  suffix?: string;
+  hint?: string;
+  tone?: "neutral" | "positive" | "negative";
+  href?: string;
+}) {
+  const accentClass = {
+    neutral: "",
+    positive: "text-pos",
+    negative: "text-neg",
+  }[tone];
+
+  const deltaBg = {
+    neutral: "bg-elev-3 text-muted border-hairline",
+    positive: "bg-pos/10 text-pos border-pos/25",
+    negative: "bg-neg/10 text-neg border-neg/25",
+  }[tone];
+
+  const inner = (
+    <div className="card card-sheen hover-lift rounded-2xl p-5">
+      <p className="label">{label}</p>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className={`metric text-2xl font-bold ${accentClass || "text-white"}`}>
+          {value}
+        </span>
+        {suffix && <span className="text-sm text-subtle">{suffix}</span>}
+        {delta && (
+          <span className={`rounded-md border px-1.5 py-0.5 font-mono text-xs font-medium ${deltaBg}`}>
+            {delta}
+          </span>
+        )}
+      </div>
+      {hint && <p className="mt-1.5 text-xs text-subtle">{hint}</p>}
+    </div>
+  );
+
+  return href ? (
+    <Link href={href} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:rounded-2xl">
+      {inner}
+    </Link>
+  ) : (
+    inner
+  );
+}
+
+/* ── Mini readiness gauge (SVG arc) ── */
+function ReadinessGauge({ score, size = 80 }: { score: number; size?: number }) {
+  const r = (size - 10) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  // Only fill 270° of the circle (leave a gap at the bottom)
+  const arcLen = circumference * 0.75;
+  const offset = arcLen - (score / 100) * arcLen;
+  const colour = score >= 80 ? "#00D6A0" : score >= 50 ? "#6C63FF" : "#FF6B6B";
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      aria-label={`Readiness score ${score.toFixed(0)} out of 100`}
+      role="img"
+    >
+      {/* Track */}
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke="rgba(255,255,255,0.08)"
+        strokeWidth={6}
+        strokeDasharray={`${arcLen} ${circumference}`}
+        strokeLinecap="round"
+        transform={`rotate(135 ${cx} ${cy})`}
+      />
+      {/* Fill */}
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke={colour}
+        strokeWidth={6}
+        strokeDasharray={`${arcLen} ${circumference}`}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform={`rotate(135 ${cx} ${cy})`}
+        className="gauge-arc"
+        style={{
+          ["--gauge-empty" as string]: arcLen,
+          ["--gauge-offset" as string]: offset,
+          transition: "stroke-dashoffset 1.2s cubic-bezier(0.16,1,0.3,1)",
+        }}
+      />
+      {/* Label */}
+      <text
+        x={cx} y={cy + 5}
+        textAnchor="middle"
+        fontSize={size * 0.22}
+        fontWeight="700"
+        fontFamily="var(--font-mono)"
+        fill={colour}
+      >
+        {score.toFixed(0)}
+      </text>
+    </svg>
   );
 }

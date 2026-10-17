@@ -25,32 +25,19 @@ export default function CoachPage() {
 
   if (!userId) return null;
 
-  const concepts = Array.from(
-    new Set(logs?.map((l) => l.concept).filter(Boolean) as string[]),
-  );
-
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Coach history</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
+        <p className="mt-1 text-sm text-muted">
           Every warning the coach fired and what you did with it.
         </p>
       </header>
 
-      {/* Named habits first. A learner arriving here wants to know what they
-          keep doing, not to scroll a chronological log looking for it. */}
       <PatternPanel userId={userId} />
-
-      {/* Anything they've failed, with a route to genuinely new questions. */}
       <RetestPanel userId={userId} />
-
-      {/* Then their own words. Reading past reasons together is where the habit
-          becomes visible to the learner themselves. */}
       <ReflectionHistory userId={userId} />
 
-      {/* Which lessons are landing and which keep tripping them up. This is the
-          learner's own behavioural mirror, not just a list of past events. */}
       {progress && progress.length > 0 && (
         <Card>
           <CardHeader
@@ -61,26 +48,26 @@ export default function CoachPage() {
             {progress.map((p) => (
               <li
                 key={p.concept}
-                className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 p-3"
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-hairline bg-elev-2 p-3 transition hover:border-hairline-strong"
               >
                 <div className="min-w-[9rem] flex-1">
                   <Link
                     href={`/learn/${p.concept}`}
-                    className="text-sm font-medium capitalize text-slate-900 hover:text-indigo-700 hover:underline"
+                    className="text-sm font-medium capitalize text-fg hover:text-brand hover:underline"
                   >
                     {p.concept.replaceAll("_", " ")}
                   </Link>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-subtle">
                     fired {p.fired}× · heeded {p.heeded} · overridden {p.ignored}
                   </p>
                 </div>
 
                 {p.heed_rate !== null && (
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
                       p.heed_rate >= 50
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-800"
+                        ? "border-pos/25 bg-pos/10 text-pos"
+                        : "border-warn/25 bg-warn/10 text-warn"
                     }`}
                   >
                     {p.heed_rate.toFixed(0)}% heeded
@@ -88,13 +75,13 @@ export default function CoachPage() {
                 )}
 
                 {p.quiz_passed ? (
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  <span className="rounded-full border border-pos/25 bg-pos/10 px-2 py-0.5 text-xs font-medium text-pos">
                     quiz passed
                   </span>
                 ) : (
                   <Link
                     href={`/coach/quiz/${p.concept}`}
-                    className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                    className="rounded-full border border-brand/25 bg-brand/10 px-3 py-1 text-xs font-medium text-brand hover:bg-brand/20"
                   >
                     take quiz →
                   </Link>
@@ -105,15 +92,15 @@ export default function CoachPage() {
         </Card>
       )}
 
-      {concepts.length === 0 && (!progress || progress.length === 0) && (
+      {!progress?.length && !logs?.length && (
         <Card>
           <CardHeader
             title="Nothing to review yet"
             subtitle="Warnings appear here once you start trading"
           />
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted">
             You can get ahead of them in the{" "}
-            <Link href="/learn" className="text-indigo-600 underline">
+            <Link href="/learn" className="text-brand hover:underline">
               concept library
             </Link>
             , which covers every idea DolFin coaches on.
@@ -129,21 +116,19 @@ export default function CoachPage() {
         {logsError ? (
           <ErrorState error={logsError} label="Couldn't load your history" />
         ) : !logs || logs.length === 0 ? (
-          <p className="text-sm text-slate-500">No interventions yet.</p>
+          <p className="text-sm text-subtle">No interventions yet.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 text-sm">
+          <ul className="divide-y divide-hairline text-sm">
             {logs.map((l) => {
               const cls = severityClasses(l.severity);
               return (
                 <li key={l.id} className="py-3">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls.badge}`}
-                    >
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls.badge}`}>
                       {l.severity}
                     </span>
                     <strong className={cls.text}>{l.title}</strong>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-subtle">
                       {new Date(l.created_at).toLocaleString()}
                     </span>
                     {l.user_action && (
@@ -157,21 +142,21 @@ export default function CoachPage() {
                         }
                         className={`ml-auto rounded-full px-2 py-0.5 text-[10px] uppercase ${
                           l.user_action === "heeded"
-                            ? "bg-emerald-100 text-emerald-700"
+                            ? "bg-pos/10 text-pos"
                             : l.user_action === "ignored"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-slate-100 text-slate-500"
+                            ? "bg-warn/10 text-warn"
+                            : "bg-elev-3 text-subtle"
                         }`}
                       >
                         {l.user_action === "ignored" ? "overridden" : l.user_action}
                       </span>
                     )}
                   </div>
-                  <p className="text-slate-700">{l.message}</p>
+                  <p className="text-muted">{l.message}</p>
                   {l.concept && (
                     <Link
                       href={`/learn/${l.concept}`}
-                      className="mt-1 inline-block text-xs text-indigo-600 hover:underline"
+                      className="mt-1 inline-block text-xs text-brand hover:underline"
                     >
                       Learn about {l.concept.replaceAll("_", " ")} →
                     </Link>

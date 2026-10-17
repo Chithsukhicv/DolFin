@@ -64,38 +64,49 @@ export function EquityCurve({ userId }: { userId: string }) {
   const scenarioStarts = points.filter((p) => p.reason === "scenario_start");
   const trough = points.reduce((lo, p) => (p.total_value < lo.total_value ? p : lo), points[0]);
 
+  const strokeColor = up ? "#00D6A0" : "#FF6B6B";
+  const fillId = up ? "equityFillUp" : "equityFillDown";
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-2xl font-semibold text-slate-900">{rupees(last)}</span>
-        <span className={`text-sm font-medium ${up ? "text-emerald-600" : "text-red-600"}`}>
+        <span className="metric text-2xl font-bold text-white">{rupees(last)}</span>
+        <span className={`text-sm font-medium ${up ? "text-pos" : "text-neg"}`}>
           {up ? "+" : ""}
           {rupees(change)} ({changePct.toFixed(1)}%)
         </span>
-        <span className="text-xs text-slate-500">since you started</span>
+        <span className="text-xs text-subtle">since you started</span>
       </div>
 
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={points} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={up ? "#059669" : "#dc2626"} stopOpacity={0.25} />
-                <stop offset="100%" stopColor={up ? "#059669" : "#dc2626"} stopOpacity={0} />
+              <linearGradient id="equityFillUp" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#00D6A0" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#00D6A0" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="equityFillDown" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FF6B6B" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#FF6B6B" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: "#64748b" }}
+              tick={{ fontSize: 11, fill: "#949aa6" }}
               interval="preserveStartEnd"
               minTickGap={30}
+              axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+              tickLine={false}
             />
             <YAxis
               domain={[min - pad, max + pad]}
-              tick={{ fontSize: 11, fill: "#64748b" }}
+              tick={{ fontSize: 11, fill: "#949aa6" }}
               tickFormatter={(v) => `${Math.round(v / 1000)}k`}
               width={44}
+              axisLine={false}
+              tickLine={false}
             />
             <Tooltip
               formatter={(v) => [rupees(Number(v ?? 0)), "Portfolio value"]}
@@ -118,14 +129,20 @@ export function EquityCurve({ userId }: { userId: string }) {
                     : "";
                 return why ? `${when} · ${why}` : when;
               }}
-              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              contentStyle={{
+                fontSize: 12,
+                borderRadius: 10,
+                background: "var(--elev-3)",
+                border: "1px solid var(--hairline-strong)",
+                color: "var(--fg)",
+              }}
             />
             <Area
               type="monotone"
               dataKey="total_value"
-              stroke={up ? "#059669" : "#dc2626"}
+              stroke={strokeColor}
               strokeWidth={2}
-              fill="url(#equityFill)"
+              fill={`url(#${fillId})`}
             />
             {scenarioStarts.map((p) => (
               <ReferenceDot
@@ -133,8 +150,8 @@ export function EquityCurve({ userId }: { userId: string }) {
                 x={p.label}
                 y={p.total_value}
                 r={4}
-                fill="#f59e0b"
-                stroke="#fff"
+                fill="#fdd663"
+                stroke="rgba(255,255,255,0.2)"
                 strokeWidth={1.5}
               />
             ))}
@@ -142,7 +159,7 @@ export function EquityCurve({ userId }: { userId: string }) {
         </ResponsiveContainer>
       </div>
 
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-subtle">
         {scenarioStarts.length > 0 ? (
           <>
             Amber dots mark where you started a scenario. Lowest point so far:{" "}

@@ -77,7 +77,7 @@ export default function RootLayout({
       className={`${sora.variable} ${inter.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col antialiased">
+      <body className="page-bg flex min-h-screen flex-col antialiased">
         {/* Lets keyboard users jump past the nav on every page. Visible only
             when focused. */}
         <a

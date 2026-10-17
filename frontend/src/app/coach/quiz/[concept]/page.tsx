@@ -19,20 +19,6 @@ import { Card, CardHeader } from "@/components/Card";
 import { ErrorState, LoadingCard } from "@/components/States";
 import { AiBadge, AiDisclaimer, Citations } from "@/components/AiLabel";
 
-/**
- * One quiz page, two question sources.
- *
- * The seeded bank has three questions per concept, which is fine the first time
- * and useless the third: by then the learner has memorised the answers rather
- * than the idea. "Fresh questions" generates new ones from the same Corpus A
- * material the concept page is written from, so the assessment tests
- * understanding instead of recall.
- *
- * Generated questions are validated server-side before they are ever shown —
- * four distinct options, exactly one answer, a real explanation — and anything
- * that fails is silently replaced by a seeded question. A slightly repetitive
- * quiz is a much better failure than a wrong one.
- */
 export default function QuizPage() {
   const router = useRouter();
   const params = useParams<{ concept: string }>();
@@ -50,8 +36,6 @@ export default function QuizPage() {
     fetcher,
   );
 
-  // Keyed on an attempt counter so "Try again" fetches a genuinely new set
-  // rather than replaying the cached one.
   const [attempt, setAttempt] = useState(0);
   const generated = useSWR<AdaptiveQuiz>(
     fresh && userId ? ["adaptive-quiz", userId, concept, attempt] : null,
@@ -98,8 +82,6 @@ export default function QuizPage() {
         );
       }
     } catch (err) {
-      // Previously swallowed: a failed submit left the button spinning with no
-      // explanation and the learner's answers apparently lost.
       setSubmitError(err instanceof Error ? err.message : "Couldn't score your answers.");
     } finally {
       setBusy(false);
@@ -121,11 +103,11 @@ export default function QuizPage() {
         />
         <div className="flex gap-3 text-sm">
           {fresh && (
-            <button onClick={() => reset(false)} className="text-indigo-600 underline">
+            <button onClick={() => reset(false)} className="text-brand underline">
               Use the standard questions
             </button>
           )}
-          <Link href="/learn" className="text-indigo-600 underline">
+          <Link href="/learn" className="text-brand underline">
             Browse the concept library
           </Link>
         </div>
@@ -139,22 +121,25 @@ export default function QuizPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold capitalize">
+        <h1 className="font-display text-2xl font-bold capitalize text-white">
           Quiz: {concept.replaceAll("_", " ")}
         </h1>
-        <p className="text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted">
           Pass with 80%+ to give your discipline sub-score a boost.
         </p>
       </header>
 
+      {/* Question set toggle */}
       {!result && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-          <span className="text-slate-600">Question set:</span>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-hairline bg-elev-1 p-3 text-sm">
+          <span className="text-muted">Question set:</span>
           <button
             onClick={() => reset(false)}
             aria-pressed={!fresh}
-            className={`rounded-lg px-3 py-1 text-xs font-medium ${
-              !fresh ? "bg-indigo-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+            className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
+              !fresh
+                ? "bg-brand/20 text-brand border border-brand/30"
+                : "bg-elev-2 text-muted border border-hairline hover:bg-elev-3"
             }`}
           >
             Standard
@@ -162,14 +147,16 @@ export default function QuizPage() {
           <button
             onClick={() => reset(true)}
             aria-pressed={fresh}
-            className={`rounded-lg px-3 py-1 text-xs font-medium ${
-              fresh ? "bg-violet-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+            className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
+              fresh
+                ? "bg-ai/15 text-ai border border-ai/30"
+                : "bg-elev-2 text-muted border border-hairline hover:bg-elev-3"
             }`}
           >
             Fresh questions
           </button>
           {fresh && generated.data && (
-            <span className="ml-auto flex items-center gap-2 text-xs text-slate-500">
+            <span className="ml-auto flex items-center gap-2 text-xs text-subtle">
               <AiBadge mode={generated.data.generated_count > 0 ? "generated" : "offline"} />
               {generated.data.generated_count > 0
                 ? `${generated.data.generated_count} new · ${generated.data.seeded_count} from the bank`
@@ -197,36 +184,34 @@ export default function QuizPage() {
             }
           />
 
-          {/* The explanations are the point of the results screen. Reporting
-              only "correct option: 2" told the learner nothing about why. */}
           <ol className="space-y-3 text-sm">
             {result.answers.map((a) => (
               <li
                 key={a.index}
-                className={`rounded-lg border p-4 ${
+                className={`rounded-xl border p-4 ${
                   a.is_correct
-                    ? "border-emerald-200 bg-emerald-50"
-                    : "border-red-200 bg-red-50"
+                    ? "border-pos/25 bg-pos/8"
+                    : "border-neg/25 bg-neg/8"
                 }`}
               >
                 <div className="mb-2 flex items-start gap-2">
                   <span
                     aria-hidden="true"
-                    className={`mt-0.5 text-xs font-bold ${
-                      a.is_correct ? "text-emerald-700" : "text-red-700"
+                    className={`mt-0.5 text-sm font-bold ${
+                      a.is_correct ? "text-pos" : "text-neg"
                     }`}
                   >
                     {a.is_correct ? "✓" : "✕"}
                   </span>
-                  <p className="font-medium text-slate-900">{a.question}</p>
+                  <p className="font-medium text-fg">{a.question}</p>
                 </div>
 
                 {!a.is_correct && a.given >= 0 && (
-                  <p className="mb-1 text-red-800">
+                  <p className="mb-1 text-neg">
                     <span className="font-medium">You chose:</span> {a.options[a.given]}
                   </p>
                 )}
-                <p className={a.is_correct ? "text-emerald-900" : "text-slate-800"}>
+                <p className={a.is_correct ? "text-pos" : "text-muted"}>
                   <span className="font-medium">
                     {a.is_correct ? "Correct: " : "Correct answer: "}
                   </span>
@@ -234,7 +219,7 @@ export default function QuizPage() {
                 </p>
 
                 {a.explanation && (
-                  <p className="mt-2 border-t border-black/5 pt-2 text-slate-700">
+                  <p className="mt-2 border-t border-hairline pt-2 text-muted">
                     {a.explanation}
                   </p>
                 )}
@@ -247,27 +232,27 @@ export default function QuizPage() {
           <div className="mt-5 flex flex-wrap gap-2">
             <button
               onClick={() => reset()}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+              className="btn-ghost rounded-lg px-3 py-1.5 text-sm"
             >
               {fresh ? "New questions" : "Try again"}
             </button>
             {!fresh && (
               <button
                 onClick={() => reset(true)}
-                className="rounded-lg border border-violet-300 px-3 py-1.5 text-sm text-violet-700 hover:bg-violet-50"
+                className="rounded-lg border border-ai/30 bg-ai/10 px-3 py-1.5 text-sm text-ai hover:bg-ai/20"
               >
                 Try fresh questions
               </button>
             )}
             <Link
               href={`/learn/${concept}`}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+              className="btn-ghost rounded-lg px-3 py-1.5 text-sm"
             >
               Read the full concept
             </Link>
             <button
               onClick={() => router.push("/coach")}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+              className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold"
             >
               Back to coach
             </button>
@@ -279,7 +264,7 @@ export default function QuizPage() {
             <ol className="space-y-4">
               {questions.map((q) => (
                 <Card key={q.index}>
-                  <p className="font-medium">
+                  <p className="font-medium text-fg">
                     {q.index + 1}. {q.question}
                   </p>
                   <ul className="mt-3 space-y-2 text-sm">
@@ -288,10 +273,10 @@ export default function QuizPage() {
                       return (
                         <li key={i}>
                           <label
-                            className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 ${
+                            className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 transition ${
                               selected
-                                ? "border-indigo-500 bg-indigo-50"
-                                : "border-slate-200 hover:bg-slate-50"
+                                ? "border-brand/40 bg-brand/10 text-fg"
+                                : "border-hairline hover:bg-elev-2 text-muted"
                             }`}
                           >
                             <input
@@ -301,7 +286,7 @@ export default function QuizPage() {
                               onChange={() =>
                                 setAnswers((a) => ({ ...a, [q.index]: i }))
                               }
-                              className="h-4 w-4"
+                              className="h-4 w-4 accent-[var(--brand)]"
                             />
                             {opt}
                           </label>
@@ -314,20 +299,18 @@ export default function QuizPage() {
             </ol>
 
             {submitError && (
-              <p role="alert" className="text-sm text-red-600">
-                {submitError}
-              </p>
+              <p role="alert" className="text-sm text-neg">{submitError}</p>
             )}
 
             <button
               onClick={submit}
               disabled={!allAnswered || busy}
-              className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="btn-primary rounded-xl px-6 py-2.5 font-semibold disabled:opacity-50"
             >
-              {busy ? "Scoring..." : "Submit"}
+              {busy ? "Scoring…" : "Submit answers"}
             </button>
             {!allAnswered && (
-              <p className="text-xs text-slate-500">Answer every question to submit.</p>
+              <p className="text-xs text-subtle">Answer every question to submit.</p>
             )}
           </>
         )

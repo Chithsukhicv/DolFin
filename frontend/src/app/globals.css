@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
+@import "../styles/animations.css";
 
 /* ---------------------------------------------------------------------------
    DolFin — dark theme
@@ -96,11 +98,14 @@
   border-color: var(--hairline);
 }
 
-html { background: var(--bg); }
+html {
+  background: var(--bg-primary, var(--bg));
+  color: var(--text-primary, var(--fg));
+}
 
 body {
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--bg-primary, var(--bg));
+  color: var(--text-primary, var(--fg));
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -229,6 +234,67 @@ h1, h2, h3, h4 {
 }
 
 /* ---------------------------------------------------------------------------
+   Premium page background
+   ---------------------------------------------------------------------------
+   Deep radial base, SVG financial grid overlay, two soft blob layers via
+   pseudo-elements (indigo top-left, cyan bottom-right) with ambient pulse.
+--------------------------------------------------------------------------- */
+@keyframes ambient-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.06; }
+  50%       { transform: scale(1.08); opacity: 0.09; }
+}
+
+.page-bg {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% 0%, #0D1220 0%, #080B12 70%);
+  /* SVG financial grid at very low opacity */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cpath d='M 80 0 L 0 0 0 80' fill='none' stroke='white' stroke-width='0.5' stroke-opacity='0.03'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 50% 0%, #0D1220 0%, #080B12 70%);
+}
+
+/* Indigo blob — top-left */
+.page-bg::before {
+  content: "";
+  position: fixed;
+  top: -20%;
+  left: -10%;
+  width: 50vw;
+  height: 50vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(108, 99, 255, 0.12) 0%, transparent 70%);
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+  animation: ambient-pulse 8s ease-in-out infinite;
+}
+
+/* Cyan blob — bottom-right */
+.page-bg::after {
+  content: "";
+  position: fixed;
+  bottom: -20%;
+  right: -10%;
+  width: 50vw;
+  height: 50vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(64, 217, 255, 0.12) 0%, transparent 70%);
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+  animation: ambient-pulse 10s ease-in-out infinite 2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-bg::before,
+  .page-bg::after {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Motion — restrained, and all of it optional
 --------------------------------------------------------------------------- */
 @keyframes rise-in {
@@ -277,6 +343,190 @@ h1, h2, h3, h4 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Card sheen — top-edge highlight, like light catching the lip of a panel.
+   Implemented as a pseudo-element so it doesn't need extra markup.
+--------------------------------------------------------------------------- */
+.card-sheen {
+  position: relative;
+  overflow: hidden;
+}
+.card-sheen::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.08) 50%, transparent 100%);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Glass card — premium glassmorphism surface
+--------------------------------------------------------------------------- */
+.glass-card {
+  background: rgba(13, 18, 32, 0.72);
+  backdrop-filter: saturate(150%) blur(16px);
+  -webkit-backdrop-filter: saturate(150%) blur(16px);
+  border: 1px solid rgba(108, 99, 255, 0.18);
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.glass-card:hover {
+  border-color: rgba(108, 99, 255, 0.32);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(108, 99, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ---------------------------------------------------------------------------
+   Glow effects
+--------------------------------------------------------------------------- */
+.glow-indigo {
+  box-shadow: 0 0 32px rgba(108, 99, 255, 0.15), 0 0 64px rgba(108, 99, 255, 0.06);
+}
+.glow-cyan {
+  box-shadow: 0 0 32px rgba(64, 217, 255, 0.12), 0 0 64px rgba(64, 217, 255, 0.05);
+}
+.glow-pos {
+  box-shadow: 0 0 20px rgba(0, 214, 160, 0.2);
+}
+.glow-neg {
+  box-shadow: 0 0 20px rgba(255, 107, 107, 0.2);
+}
+
+/* ---------------------------------------------------------------------------
+   Aurora — animated colour haze for hero sections
+--------------------------------------------------------------------------- */
+@keyframes aurora-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+  33%       { transform: translate(30px, -20px) scale(1.05); opacity: 0.7; }
+  66%       { transform: translate(-20px, 10px) scale(0.98); opacity: 0.4; }
+}
+
+.aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+.aurora::before {
+  content: "";
+  position: absolute;
+  top: -30%;
+  left: -20%;
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(ellipse, rgba(108, 99, 255, 0.18) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: aurora-drift 12s ease-in-out infinite;
+}
+.aurora::after {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  right: -15%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(ellipse, rgba(64, 217, 255, 0.14) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: aurora-drift 15s ease-in-out infinite 3s reverse;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before, .aurora::after { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Scene + tilt — 3D perspective card used in hero sections
+--------------------------------------------------------------------------- */
+.scene {
+  perspective: 800px;
+  perspective-origin: 50% 40%;
+}
+.tilt {
+  transform: rotateX(4deg) rotateY(-6deg);
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tilt:hover {
+  transform: rotateX(2deg) rotateY(-3deg) translateY(-4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tilt { transform: none !important; transition: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Score gauge animation
+--------------------------------------------------------------------------- */
+@keyframes gauge-fill {
+  from { stroke-dashoffset: var(--gauge-empty); }
+  to   { stroke-dashoffset: var(--gauge-offset); }
+}
+.gauge-arc {
+  animation: gauge-fill 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 300ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gauge-arc { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Scenario cards
+--------------------------------------------------------------------------- */
+.scenario-card {
+  position: relative;
+  border-radius: 16px;
+  padding: 1.25rem;
+  border: 1px solid var(--hairline);
+  background: var(--elev-1);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+.scenario-card:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5);
+}
+.scenario-card-crash { border-color: rgba(239, 68, 68, 0.3); }
+.scenario-card-crash:hover { border-color: rgba(239, 68, 68, 0.6); box-shadow: 0 8px 32px -4px rgba(239, 68, 68, 0.15); }
+.scenario-card-bear  { border-color: rgba(220, 38, 38, 0.3); }
+.scenario-card-bear:hover  { border-color: rgba(220, 38, 38, 0.6); box-shadow: 0 8px 32px -4px rgba(220, 38, 38, 0.18); }
+.scenario-card-bull  { border-color: rgba(0, 214, 160, 0.3); }
+.scenario-card-bull:hover  { border-color: rgba(0, 214, 160, 0.6); box-shadow: 0 8px 32px -4px rgba(0, 214, 160, 0.15); }
+.scenario-card-mild  { border-color: rgba(253, 214, 99, 0.3); }
+.scenario-card-mild:hover  { border-color: rgba(253, 214, 99, 0.6); box-shadow: 0 8px 32px -4px rgba(253, 214, 99, 0.12); }
+.scenario-card-side  { border-color: rgba(64, 217, 255, 0.2); }
+.scenario-card-side:hover  { border-color: rgba(64, 217, 255, 0.45); box-shadow: 0 8px 32px -4px rgba(64, 217, 255, 0.1); }
+
+/* ---------------------------------------------------------------------------
+   Assistant orb
+--------------------------------------------------------------------------- */
+@keyframes orb-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0.3), 0 0 24px rgba(64, 217, 255, 0.15); }
+  50%       { box-shadow: 0 0 0 8px rgba(108, 99, 255, 0), 0 0 40px rgba(64, 217, 255, 0.25); }
+}
+@keyframes orb-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.ai-orb {
+  animation: orb-pulse 3s ease-in-out infinite;
+}
+.ai-orb-ring {
+  animation: orb-spin 12s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-orb { animation: none; }
+  .ai-orb-ring { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Count-up animation utility
+--------------------------------------------------------------------------- */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.count-up { animation: count-up 0.4s ease both; }
 
 /* ---------------------------------------------------------------------------
    Scrollbar

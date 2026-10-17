@@ -15,7 +15,13 @@ import { Card, CardHeader } from "@/components/Card";
 import { InterventionModal } from "@/components/InterventionModal";
 import { EmptyState, ErrorState, LoadingCard, StaleBadge } from "@/components/States";
 import { Term } from "@/components/Term";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import Link from "next/link";
+
+const SECTOR_COLOURS = [
+  "#6C63FF", "#40D9FF", "#00D6A0", "#f59e0b", "#ef4444",
+  "#a855f7", "#14b8a6", "#f97316", "#84cc16", "#ec4899",
+];
 
 export default function PortfolioPage() {
   const userId = useRequireUser();
@@ -59,20 +65,77 @@ export default function PortfolioPage() {
     }
   }
 
+  const sectorData = pf
+    ? Object.entries(pf.sector_allocation_pct).map(([name, value]) => ({
+        name,
+        value: Math.round(value * 10) / 10,
+      }))
+    : [];
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Portfolio</h1>
+      <h1 className="font-display text-2xl font-bold text-white">Portfolio</h1>
 
       {pfError && <ErrorState error={pfError} label="Couldn't load your portfolio" />}
 
       {pf && pf.stale_price_count > 0 && (
-        <p
-          role="status"
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
-        >
-          Some prices below are from cache because the live feed didn&apos;t respond. Rows are
-          marked, and values may be slightly behind.
+        <p role="status" className="rounded-xl border border-warn/30 bg-warn/8 px-4 py-3 text-sm text-warn">
+          Some prices below are from cache. Rows are marked — values may be slightly behind.
         </p>
+      )}
+
+      {/* Allocation donut + holdings table */}
+      {pf && sectorData.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Allocation"
+            subtitle="How your portfolio is spread across sectors"
+          />
+          <div className="flex flex-wrap items-center gap-8">
+            <div className="h-52 w-52 shrink-0">
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={sectorData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={52}
+                    outerRadius={82}
+                    stroke="rgba(255,255,255,0.05)"
+                    strokeWidth={2}
+                    paddingAngle={3}
+                  >
+                    {sectorData.map((_, i) => (
+                      <Cell key={i} fill={SECTOR_COLOURS[i % SECTOR_COLOURS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v) => [`${Number(v).toFixed(1)}%`, "Allocation"]}
+                    contentStyle={{
+                      background: "var(--elev-3)",
+                      border: "1px solid var(--hairline-strong)",
+                      borderRadius: 10,
+                      color: "var(--fg)",
+                      fontSize: 12,
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <ul className="flex-1 space-y-2 text-sm">
+              {sectorData.map((s, i) => (
+                <li key={s.name} className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: SECTOR_COLOURS[i % SECTOR_COLOURS.length] }}
+                  />
+                  <span className="flex-1 text-muted">{s.name}</span>
+                  <span className="font-mono text-xs font-semibold text-fg">{pct(s.value, 1)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
       )}
 
       <Card>
@@ -80,7 +143,7 @@ export default function PortfolioPage() {
           title="Your holdings"
           subtitle={
             pf
-              ? `${pf.holdings.length} positions · market value ${rupees(pf.market_value)}`
+              ? `${pf.holdings.length} position${pf.holdings.length !== 1 ? "s" : ""} · market value ${rupees(pf.market_value)}`
               : ""
           }
         />
@@ -92,7 +155,7 @@ export default function PortfolioPage() {
             action={
               <Link
                 href="/market"
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                className="btn-primary rounded-lg px-4 py-2 text-sm font-medium"
               >
                 Browse the market →
               </Link>
@@ -103,57 +166,51 @@ export default function PortfolioPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-slate-500">
+              <thead className="text-left">
                 <tr>
-                  <th className="py-2">Stock</th>
-                  <th>
+                  <th className="py-2 text-xs font-medium text-subtle">Stock</th>
+                  <th className="text-xs font-medium text-subtle">
                     <Term name="sector">Sector</Term>
                   </th>
-                  <th className="text-right">Qty</th>
-                  <th className="text-right">
+                  <th className="text-right text-xs font-medium text-subtle">Qty</th>
+                  <th className="text-right text-xs font-medium text-subtle">
                     <Term name="avg_cost">Avg cost</Term>
                   </th>
-                  <th className="text-right">Live</th>
-                  <th className="text-right">
+                  <th className="text-right text-xs font-medium text-subtle">Live</th>
+                  <th className="text-right text-xs font-medium text-subtle">
                     <Term name="market_value">Value</Term>
                   </th>
-                  <th className="text-right">
+                  <th className="text-right text-xs font-medium text-subtle">
                     <Term name="unrealised_pnl">P&amp;L</Term>
                   </th>
-                  <th>
-                    <span className="sr-only">Actions</span>
-                  </th>
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {pf?.holdings.map((h) => (
-                  <tr key={h.symbol} className="border-t border-slate-100">
-                    <td className="py-2">
-                      <p className="font-medium">{h.name}</p>
-                      <p className="text-xs text-slate-500">{h.symbol}</p>
+                  <tr key={h.symbol} className="row-hover border-t border-hairline">
+                    <td className="py-3 pr-3">
+                      <p className="font-medium text-fg">{h.name}</p>
+                      <p className="text-xs text-subtle">{h.symbol}</p>
                     </td>
-                    <td className="text-slate-600">{h.sector}</td>
-                    <td className="text-right">{h.quantity}</td>
-                    <td className="text-right">{rupees(h.avg_cost)}</td>
-                    <td className="text-right">
+                    <td className="text-muted">{h.sector}</td>
+                    <td className="text-right font-mono text-fg">{h.quantity}</td>
+                    <td className="text-right font-mono text-fg">{rupees(h.avg_cost)}</td>
+                    <td className="text-right font-mono text-fg">
                       {rupees(h.live_price)}
                       {h.price_stale && <StaleBadge unavailable={h.price_unavailable} />}
                     </td>
-                    <td className="text-right">{rupees(h.market_value)}</td>
-                    <td
-                      className={`text-right ${
-                        h.unrealised_pnl >= 0 ? "text-emerald-600" : "text-red-600"
-                      }`}
-                    >
+                    <td className="text-right font-mono text-fg">{rupees(h.market_value)}</td>
+                    <td className={`text-right font-mono font-medium ${h.unrealised_pnl >= 0 ? "text-pos" : "text-neg"}`}>
                       {rupees(h.unrealised_pnl)}
-                      <span className="ml-1 text-xs">
+                      <span className="ml-1 text-xs opacity-70">
                         ({pct(h.unrealised_pnl_pct)})
                       </span>
                     </td>
-                    <td className="text-right">
+                    <td className="pl-3 text-right">
                       <button
                         onClick={() => startSell(h)}
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+                        className="rounded-lg border border-hairline-strong bg-elev-2 px-2.5 py-1 text-xs text-muted transition hover:border-neg/40 hover:bg-neg/10 hover:text-neg"
                       >
                         Sell
                       </button>
@@ -166,56 +223,80 @@ export default function PortfolioPage() {
         )}
       </Card>
 
-      {/* Sell modal */}
+      {/* ── Sell modal — dark theme ── */}
       {selling && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelling(null);
           }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="mb-1 text-lg font-semibold">Sell {selling.symbol}</h2>
-            <p className="text-sm text-slate-500">
-              You hold {selling.quantity} · live {rupees(selling.live_price)} · avg{" "}
-              {rupees(selling.avg_cost)}
-            </p>
+          <div className="card-raised w-full max-w-md animate-rise rounded-2xl p-6">
+            <div className="mb-1 flex items-start justify-between">
+              <div>
+                <h2 className="font-display text-lg font-bold text-white">
+                  Sell {selling.symbol}
+                </h2>
+                <p className="text-sm text-muted">
+                  Holding {selling.quantity} · live{" "}
+                  <span className="font-mono text-fg">{rupees(selling.live_price)}</span>
+                  {" · "}avg{" "}
+                  <span className="font-mono text-fg">{rupees(selling.avg_cost)}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelling(null)}
+                aria-label="Close"
+                className="ml-4 rounded-lg p-1.5 text-subtle transition hover:bg-elev-3 hover:text-fg"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 4l8 8M12 4L4 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
 
-            <div className="mt-4">
-              <label className="text-xs font-medium text-slate-600">Quantity</label>
-              <input
-                type="number"
-                min={1}
-                max={selling.quantity}
-                value={qty}
-                onChange={(e) =>
-                  setQty(
-                    Math.min(
-                      selling.quantity,
-                      Math.max(1, parseInt(e.target.value || "1", 10)),
-                    ),
-                  )
-                }
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Proceeds: {rupees(selling.live_price * qty)}
+            <div className="mt-5">
+              <label className="label block">Quantity</label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQty(q => Math.max(1, q - 1))}
+                  className="rounded-lg border border-hairline-strong bg-elev-2 px-3 py-2 text-sm text-fg hover:bg-elev-3"
+                >−</button>
+                <input
+                  type="number"
+                  min={1}
+                  max={selling.quantity}
+                  value={qty}
+                  onChange={(e) =>
+                    setQty(Math.min(selling.quantity, Math.max(1, parseInt(e.target.value || "1", 10))))
+                  }
+                  className="w-full rounded-lg border border-hairline-strong bg-elev-3 px-3 py-2 text-center text-sm text-fg outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setQty(q => Math.min(selling.quantity, q + 1))}
+                  className="rounded-lg border border-hairline-strong bg-elev-2 px-3 py-2 text-sm text-fg hover:bg-elev-3"
+                >+</button>
+              </div>
+              <p className="mt-1.5 text-xs text-subtle">
+                Proceeds: <span className="font-mono text-fg">{rupees(selling.live_price * qty)}</span>
               </p>
             </div>
 
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && <p role="alert" className="mt-3 text-sm text-neg">{error}</p>}
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setSelling(null)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+                className="btn-ghost rounded-lg px-4 py-2 text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePreview}
                 disabled={busy}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
               >
                 {busy ? "Checking..." : "Preview sell"}
               </button>

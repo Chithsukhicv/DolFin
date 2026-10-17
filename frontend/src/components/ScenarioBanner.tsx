@@ -22,10 +22,10 @@ export function ScenarioBanner() {
     <div
       className={`border-b ${
         isCrash
-          ? "border-red-300 bg-red-50 text-red-900"
+          ? "border-neg/30 bg-neg/10 text-neg"
           : data.kind === "rally"
-          ? "border-emerald-300 bg-emerald-50 text-emerald-900"
-          : "border-slate-200 bg-slate-100 text-slate-700"
+          ? "border-pos/30 bg-pos/10 text-pos"
+          : "border-hairline bg-elev-1 text-muted"
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2 text-sm">
@@ -35,7 +35,7 @@ export function ScenarioBanner() {
           </strong>{" "}
           — {data.narrative ?? `severity ${data.severity}`}
         </span>
-        <span className="rounded-full bg-white/60 px-2 py-0.5 text-xs font-medium">
+        <span className="rounded-full bg-black/20 px-2 py-0.5 text-xs font-medium">
           {isCrash ? `−${dropPct}%` : `${(data.current_multiplier - 1) * 100 > 0 ? "+" : ""}${(
             (data.current_multiplier - 1) * 100
           ).toFixed(1)}%`}
