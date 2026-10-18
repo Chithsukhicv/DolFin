@@ -18,7 +18,7 @@ import { EmptyState, ErrorState, LoadingCard, StaleBadge } from "@/components/St
 import { Term } from "@/components/Term";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import Link from "next/link";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const PortfolioScene = dynamic(
   () => import("@/components/three/PortfolioScene").then((m) => m.PortfolioScene),
@@ -100,7 +100,7 @@ export default function PortfolioPage() {
           />
           <div className="flex flex-wrap items-center gap-6">
             {/* 3D scene primary */}
-            <WebGLCanvas
+            <LazyCanvas
               className="h-[300px] w-full rounded-xl md:w-[300px]"
               camera={{ position: [0, 4, 5], fov: 50 }}
               fallback={
@@ -123,7 +123,7 @@ export default function PortfolioPage() {
                   color: SECTOR_COLOURS[i % SECTOR_COLOURS.length],
                 }))}
               />
-            </WebGLCanvas>
+            </LazyCanvas>
             {/* Legend */}
             <ul className="flex-1 space-y-2 text-sm">
               {sectorData.map((s, i) => (

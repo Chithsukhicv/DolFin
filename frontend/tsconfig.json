@@ -19,6 +19,7 @@
   "include": [
     "next-env.d.ts",
     "src/three-global.d.ts",
+    "src/components/three/r3f.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",

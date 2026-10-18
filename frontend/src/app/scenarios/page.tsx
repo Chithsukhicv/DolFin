@@ -11,7 +11,7 @@ import {
 } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const ScenarioScene = dynamic(
   () => import("@/components/three/ScenarioScene").then((m) => m.ScenarioScene),
@@ -137,7 +137,7 @@ export default function ScenariosPage() {
 
       {/* ── 3D Scenario visualization ── */}
       <div className="relative overflow-hidden rounded-2xl border border-hairline">
-        <WebGLCanvas
+        <LazyCanvas
           className="h-[200px] w-full"
           camera={{ position: [0, 0, 4.5], fov: 55 }}
         >
@@ -148,7 +148,7 @@ export default function ScenariosPage() {
                 : null
             }
           />
-        </WebGLCanvas>
+        </LazyCanvas>
         {active?.is_active && (
           <div className="absolute bottom-2 left-3 rounded bg-black/60 px-2 py-0.5 text-xs font-semibold backdrop-blur-sm" style={{ color: "#FF6B6B" }}>
             {active.kind} scenario active

@@ -11,7 +11,7 @@ import { PatternPanel } from "@/components/PatternPanel";
 import { ReflectionHistory } from "@/components/ReflectionHistory";
 import { RetestPanel } from "@/components/RetestPanel";
 import { severityClasses } from "@/lib/format";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const CoachOrbScene = dynamic(
   () => import("@/components/three/CoachOrbScene").then((m) => m.CoachOrbScene),
@@ -35,12 +35,12 @@ export default function CoachPage() {
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-5">
-        <WebGLCanvas
+        <LazyCanvas
           className="h-[90px] w-[90px] shrink-0"
           camera={{ position: [0, 0, 3.5], fov: 50 }}
         >
           <CoachOrbScene isThinking={false} />
-        </WebGLCanvas>
+        </LazyCanvas>
         <div>
           <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
           <p className="mt-1 text-sm text-muted">

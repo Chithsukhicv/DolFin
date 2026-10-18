@@ -1,8 +1,5 @@
 "use client";
 
-// eslint-disable-next-line @typescript-eslint/triple-slash-reference
-/// <reference types="@react-three/fiber" />
-
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";

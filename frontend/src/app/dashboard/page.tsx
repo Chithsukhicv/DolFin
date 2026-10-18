@@ -5,7 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const DashboardScene = dynamic(
   () => import("@/components/three/DashboardScene").then((m) => m.DashboardScene),
@@ -110,12 +110,12 @@ export default function DashboardPage() {
         {/* Readiness badge floating right */}
         {scoreActive && (
           <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 flex-col items-center lg:flex">
-            <WebGLCanvas
+            <LazyCanvas
               className="h-[220px] w-[220px]"
               camera={{ position: [0, 0, 6], fov: 55 }}
             >
               <DashboardScene score={scoreValue} />
-            </WebGLCanvas>
+            </LazyCanvas>
           </div>
         )}
       </header>
@@ -206,12 +206,12 @@ export default function DashboardPage() {
                 Full breakdown →
               </Link>
             </div>
-            <WebGLCanvas
+            <LazyCanvas
               className="h-[260px] w-full md:w-[260px]"
               camera={{ position: [0, 0, 6], fov: 55 }}
             >
               <DashboardScene score={scoreValue} />
-            </WebGLCanvas>
+            </LazyCanvas>
           </div>
         </div>
       )}

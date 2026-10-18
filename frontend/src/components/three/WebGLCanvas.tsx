@@ -1,7 +1,12 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import dynamic from "next/dynamic";
+
+const Canvas = dynamic(
+  () => import("@react-three/fiber").then((m) => m.Canvas),
+  { ssr: false }
+);
 
 // Detect WebGL support
 function hasWebGL(): boolean {

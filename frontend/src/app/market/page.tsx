@@ -11,7 +11,7 @@ import { InterventionModal } from "@/components/InterventionModal";
 import { PriceChart } from "@/components/PriceChart";
 import { ErrorState, StaleBadge } from "@/components/States";
 import Link from "next/link";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const MarketScene = dynamic(
   () => import("@/components/three/MarketScene").then((m) => m.MarketScene),
@@ -54,12 +54,12 @@ export default function MarketPage() {
 
         {/* 3D Market visualization — decorative */}
         <div className="relative overflow-hidden rounded-2xl border border-hairline">
-          <WebGLCanvas
+          <LazyCanvas
             className="h-[160px] w-full"
             camera={{ position: [0, 3.5, 4], fov: 55 }}
           >
             <MarketScene />
-          </WebGLCanvas>
+          </LazyCanvas>
           <div className="absolute bottom-2 right-3 rounded bg-black/50 px-2 py-0.5 text-[10px] text-subtle backdrop-blur-sm">
             Visualisation only — not real market data
           </div>

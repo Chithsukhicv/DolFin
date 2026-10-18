@@ -7,7 +7,7 @@ import { ai, ApiError, type ChatAnswer, type ChatMessage } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
 import { AiBadge, AiDisclaimer, Citations } from "@/components/AiLabel";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const CoachOrbScene = dynamic(
   () => import("@/components/three/CoachOrbScene").then((m) => m.CoachOrbScene),
@@ -109,12 +109,12 @@ export default function AskPage() {
     <div className="space-y-6">
       {/* ── Header with 3D orb ── */}
       <header className="flex items-center gap-5">
-        <WebGLCanvas
+        <LazyCanvas
           className="h-[100px] w-[100px] shrink-0"
           camera={{ position: [0, 0, 3.5], fov: 50 }}
         >
           <CoachOrbScene isThinking={busy} />
-        </WebGLCanvas>
+        </LazyCanvas>
         <div>
           <h1 className="font-display text-2xl font-bold text-white">Ask DolFin</h1>
           <p className="mt-0.5 text-sm text-muted">

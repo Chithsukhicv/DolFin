@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { api, ApiError, type GoalTemplate, type User } from "@/lib/api";
 import { getUserId, setUserId } from "@/lib/session";
 import { Hero } from "@/components/Hero";
-import { WebGLCanvas } from "@/components/three/WebGLCanvas";
+import { LazyCanvas } from "@/components/three/LazyCanvas";
 
 const HeroScene = dynamic(
   () => import("@/components/three/HeroScene").then((m) => m.HeroScene),
@@ -122,12 +122,12 @@ export default function OnboardingPage() {
     <div className="-my-8 py-10">
       {/* ── 3D Hero Section ── */}
       <div className="relative mb-8 overflow-hidden rounded-3xl border border-hairline bg-[#080B12]">
-        <WebGLCanvas
+        <LazyCanvas
           className="h-[420px] w-full md:h-[500px]"
           camera={{ position: [0, 0, 5.5], fov: 60 }}
         >
           <HeroScene />
-        </WebGLCanvas>
+        </LazyCanvas>
         {/* Text overlay */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-6">
           <div className="pointer-events-auto">
