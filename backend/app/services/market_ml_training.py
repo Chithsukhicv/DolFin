@@ -187,7 +187,7 @@ def _build_pipeline(arch: str):
     if arch == "lr":
         from sklearn.linear_model import LogisticRegression
         clf = LogisticRegression(
-            C=1.0,
+            C=0.05,
             max_iter=1000,
             solver="lbfgs",
             random_state=42,
@@ -195,9 +195,12 @@ def _build_pipeline(arch: str):
     elif arch == "gbm":
         from sklearn.ensemble import GradientBoostingClassifier
         clf = GradientBoostingClassifier(
-            n_estimators=200,
-            max_depth=3,
-            learning_rate=0.05,
+            n_estimators=60,
+            max_depth=2,
+            learning_rate=0.04,
+            subsample=0.8,
+            max_features="sqrt",
+            min_samples_leaf=10,
             random_state=42,
         )
     else:
