@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
-import dynamic from "next/dynamic";
 import {
   api,
   fetcher,
@@ -12,23 +11,22 @@ import {
 } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { rupees, pct } from "@/lib/format";
-import { Card, CardHeader } from "@/components/Card";
 import { InterventionModal } from "@/components/InterventionModal";
 import { EmptyState, ErrorState, LoadingCard, StaleBadge } from "@/components/States";
 import { Term } from "@/components/Term";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import Link from "next/link";
-import { LazyCanvas } from "@/components/three/LazyCanvas";
 
-const PortfolioScene = dynamic(
-  () => import("@/components/three/PortfolioScene").then((m) => m.PortfolioScene),
-  { ssr: false }
-);
-
-const SECTOR_COLOURS = [
-  "#6C63FF", "#40D9FF", "#00D6A0", "#f59e0b", "#ef4444",
-  "#a855f7", "#14b8a6", "#f97316", "#84cc16", "#ec4899",
-];
+const SECTOR_COLOURS: Record<string, string> = {
+  Technology: "#A855F7",
+  Finance: "#22D3EE",
+  Healthcare: "#10D9A0",
+  Consumer: "#4F7CFF",
+  Energy: "#F5A623",
+  Materials: "#F25767",
+};
+function sectorColour(s: string) {
+  return SECTOR_COLOURS[s] ?? "#A1A1B5";
+}
 
 export default function PortfolioPage() {
   const userId = useRequireUser();
@@ -51,6 +49,7 @@ export default function PortfolioPage() {
     setSelling(h);
     setQty(1);
     setError(null);
+    setPreview(null);
   }
 
   async function handlePreview() {
@@ -72,233 +71,295 @@ export default function PortfolioPage() {
     }
   }
 
-  const sectorData = pf
-    ? Object.entries(pf.sector_allocation_pct).map(([name, value]) => ({
-        name,
-        value: Math.round(value * 10) / 10,
-      }))
-    : [];
+  const totalValue = pf?.market_value ?? 0;
 
   return (
-    <div className="space-y-6">
-      <h1 className="font-display text-2xl font-bold text-white">Portfolio</h1>
+    <div className="space-y-8">
+      {/* Header */}
+      <header className="animate-rise">
+        <p className="label mb-1" style={{ color: "#22D3EE" }}>Holdings</p>
+        <h1 className="font-display text-2xl font-bold text-white">Portfolio</h1>
+        {pf && (
+          <p className="mt-1 text-sm text-muted">
+            {pf.holdings.length} positions ·{" "}
+            <span className="metric font-semibold text-white">{rupees(pf.market_value)}</span>
+            {" "}market value
+          </p>
+        )}
+      </header>
 
       {pfError && <ErrorState error={pfError} label="Couldn't load your portfolio" />}
 
       {pf && pf.stale_price_count > 0 && (
-        <p role="status" className="rounded-xl border border-warn/30 bg-warn/8 px-4 py-3 text-sm text-warn">
-          Some prices below are from cache. Rows are marked — values may be slightly behind.
-        </p>
+        <div
+          role="status"
+          className="rounded-xl px-4 py-3 text-sm"
+          style={{
+            background: "rgb(245 166 35 / 0.08)",
+            border: "1px solid rgb(245 166 35 / 0.25)",
+            color: "#F5A623",
+          }}
+        >
+          Some prices below are from cache — rows are marked, values may be slightly behind.
+        </div>
       )}
 
-      {/* 3D Allocation scene + 2D fallback */}
-      {pf && sectorData.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Portfolio allocation"
-            subtitle="Hover a segment to inspect. 3D extruded geometry — each wedge has real depth."
-          />
-          <div className="flex flex-wrap items-center gap-6">
-            {/* 3D scene primary */}
-            <LazyCanvas
-              className="h-[300px] w-full rounded-xl md:w-[300px]"
-              camera={{ position: [0, 4, 5], fov: 50 }}
-              fallback={
-                <div className="h-[300px] w-full md:w-[300px]">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={sectorData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} stroke="rgba(255,255,255,0.05)" strokeWidth={2} paddingAngle={3}>
-                        {sectorData.map((_, i) => <Cell key={i} fill={SECTOR_COLOURS[i % SECTOR_COLOURS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v) => [`${Number(v).toFixed(1)}%`, "Allocation"]} contentStyle={{ background: "var(--elev-3)", border: "1px solid var(--hairline-strong)", borderRadius: 10, color: "var(--fg)", fontSize: 12 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+      {/* Summary metrics row */}
+      {pf && (
+        <div className="stagger grid gap-4 sm:grid-cols-3">
+          {[
+            { label: "Market Value", value: rupees(pf.market_value), tone: "#22D3EE" },
+            { label: "Cash Available", value: rupees(pf.cash), tone: "#A855F7" },
+            {
+              label: "Unrealised P&L",
+              value: rupees(pf.unrealised_pnl),
+              tone: pf.unrealised_pnl >= 0 ? "#10D9A0" : "#F25767",
+            },
+          ].map((m) => (
+            <div
+              key={m.label}
+              className="relative overflow-hidden rounded-2xl p-4"
+              style={{
+                background: "rgb(11 11 27 / 0.85)",
+                border: `1px solid ${m.tone}28`,
+                boxShadow: `0 0 20px -8px ${m.tone}40`,
+              }}
+            >
+              <div
+                className="absolute inset-x-0 top-0 h-px"
+                style={{ background: `linear-gradient(90deg, transparent, ${m.tone}, transparent)` }}
+                aria-hidden
+              />
+              <p className="label" style={{ color: m.tone }}>{m.label}</p>
+              <p className="metric mt-2 text-xl font-bold text-white">{m.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Holdings table */}
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{
+          background: "rgb(11 11 27 / 0.85)",
+          border: "1px solid rgb(124 58 237 / 0.2)",
+          boxShadow: "0 0 24px -8px rgb(124 58 237 / 0.1)",
+        }}
+      >
+        <div
+          className="absolute inset-x-0 top-0 h-px"
+          style={{ background: "linear-gradient(90deg, transparent, #7C3AED 30%, #22D3EE 70%, transparent)" }}
+          aria-hidden
+        />
+        <div className="p-5">
+          <h3 className="font-display text-base font-bold text-white">Your Holdings</h3>
+        </div>
+
+        {!pf && !pfError ? (
+          <div className="p-5 pt-0">
+            <LoadingCard lines={3} />
+          </div>
+        ) : pf && pf.holdings.length === 0 ? (
+          <div className="p-5 pt-0">
+            <EmptyState
+              title="No holdings yet"
+              action={
+                <Link
+                  href="/market"
+                  className="rounded-xl px-5 py-2.5 text-sm font-semibold"
+                  style={{
+                    background: "linear-gradient(135deg, #6d28d9, #7c3aed)",
+                    color: "#fff",
+                    boxShadow: "0 4px 16px -4px rgb(124 58 237 / 0.5)",
+                  }}
+                >
+                  Browse Market →
+                </Link>
               }
             >
-              <PortfolioScene
-                sectors={sectorData.map((s, i) => ({
-                  name: s.name,
-                  value: s.value,
-                  color: SECTOR_COLOURS[i % SECTOR_COLOURS.length],
-                }))}
-              />
-            </LazyCanvas>
-            {/* Legend */}
-            <ul className="flex-1 space-y-2 text-sm">
-              {sectorData.map((s, i) => (
-                <li key={s.name} className="flex items-center gap-2">
-                  <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: SECTOR_COLOURS[i % SECTOR_COLOURS.length] }} />
-                  <span className="flex-1 text-muted">{s.name}</span>
-                  <span className="font-mono text-xs font-semibold text-fg">{pct(s.value, 1)}</span>
-                </li>
-              ))}
-            </ul>
+              Buy your first practice position and it will appear here with live P&amp;L.
+            </EmptyState>
           </div>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader
-          title="Your holdings"
-          subtitle={
-            pf
-              ? `${pf.holdings.length} position${pf.holdings.length !== 1 ? "s" : ""} · market value ${rupees(pf.market_value)}`
-              : ""
-          }
-        />
-        {!pf && !pfError ? (
-          <LoadingCard lines={3} />
-        ) : pf && pf.holdings.length === 0 ? (
-          <EmptyState
-            title="No holdings yet"
-            action={
-              <Link
-                href="/market"
-                className="btn-primary rounded-lg px-4 py-2 text-sm font-medium"
-              >
-                Browse the market →
-              </Link>
-            }
-          >
-            Buy your first practice position and it will appear here with live P&amp;L.
-          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left">
-                <tr>
-                  <th className="py-2 text-xs font-medium text-subtle">Stock</th>
-                  <th className="text-xs font-medium text-subtle">
-                    <Term name="sector">Sector</Term>
-                  </th>
-                  <th className="text-right text-xs font-medium text-subtle">Qty</th>
-                  <th className="text-right text-xs font-medium text-subtle">
-                    <Term name="avg_cost">Avg cost</Term>
-                  </th>
-                  <th className="text-right text-xs font-medium text-subtle">Live</th>
-                  <th className="text-right text-xs font-medium text-subtle">
-                    <Term name="market_value">Value</Term>
-                  </th>
-                  <th className="text-right text-xs font-medium text-subtle">
-                    <Term name="unrealised_pnl">P&amp;L</Term>
-                  </th>
-                  <th><span className="sr-only">Actions</span></th>
+              <thead>
+                <tr
+                  className="text-left text-xs"
+                  style={{ borderBottom: "1px solid rgb(124 58 237 / 0.15)" }}
+                >
+                  {["Stock", "Sector", "Qty", "Avg Cost", "Live", "Value", "P&L", ""].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className={`px-4 py-3 font-medium ${h === "Qty" || h === "Avg Cost" || h === "Live" || h === "Value" || h === "P&L" ? "text-right" : ""}`}
+                        style={{ color: "#6b6b85" }}
+                      >
+                        {h === "P&L" ? <Term name="unrealised_pnl">P&amp;L</Term> : h === "Avg Cost" ? <Term name="avg_cost">{h}</Term> : h === "Value" ? <Term name="market_value">{h}</Term> : h === "Sector" ? <Term name="sector">{h}</Term> : h}
+                      </th>
+                    )
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {pf?.holdings.map((h) => (
-                  <tr key={h.symbol} className="row-hover border-t border-hairline">
-                    <td className="py-3 pr-3">
-                      <p className="font-medium text-fg">{h.name}</p>
-                      <p className="text-xs text-subtle">{h.symbol}</p>
-                    </td>
-                    <td className="text-muted">{h.sector}</td>
-                    <td className="text-right font-mono text-fg">{h.quantity}</td>
-                    <td className="text-right font-mono text-fg">{rupees(h.avg_cost)}</td>
-                    <td className="text-right font-mono text-fg">
-                      {rupees(h.live_price)}
-                      {h.price_stale && <StaleBadge unavailable={h.price_unavailable} />}
-                    </td>
-                    <td className="text-right font-mono text-fg">{rupees(h.market_value)}</td>
-                    <td className={`text-right font-mono font-medium ${h.unrealised_pnl >= 0 ? "text-pos" : "text-neg"}`}>
-                      {rupees(h.unrealised_pnl)}
-                      <span className="ml-1 text-xs opacity-70">
-                        ({pct(h.unrealised_pnl_pct)})
-                      </span>
-                    </td>
-                    <td className="pl-3 text-right">
-                      <button
-                        onClick={() => startSell(h)}
-                        className="rounded-lg border border-hairline-strong bg-elev-2 px-2.5 py-1 text-xs text-muted transition hover:border-neg/40 hover:bg-neg/10 hover:text-neg"
-                      >
-                        Sell
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {pf?.holdings.map((h) => {
+                  const weight = totalValue > 0 ? (h.market_value / totalValue) * 100 : 0;
+                  return (
+                    <tr
+                      key={h.symbol}
+                      className="transition"
+                      style={{ borderBottom: "1px solid rgb(124 58 237 / 0.08)" }}
+                    >
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-white">{h.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="font-mono text-[11px] text-muted">{h.symbol}</p>
+                          {/* weight bar */}
+                          <div className="h-1 w-16 overflow-hidden rounded-full" style={{ background: "rgb(124 58 237 / 0.15)" }}>
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.min(100, weight)}%`,
+                                background: `linear-gradient(90deg, #7C3AED, #22D3EE)`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="rounded-md px-2 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background: `${sectorColour(h.sector)}18`,
+                            color: sectorColour(h.sector),
+                            border: `1px solid ${sectorColour(h.sector)}30`,
+                          }}
+                        >
+                          {h.sector}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right metric text-sm text-white">{h.quantity}</td>
+                      <td className="px-4 py-3 text-right metric text-sm text-muted">{rupees(h.avg_cost)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="metric text-sm text-white">{rupees(h.live_price)}</span>
+                        {h.price_stale && <StaleBadge unavailable={h.price_unavailable} />}
+                      </td>
+                      <td className="px-4 py-3 text-right metric text-sm text-white">{rupees(h.market_value)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span
+                            className="metric text-sm font-semibold"
+                            style={{ color: h.unrealised_pnl >= 0 ? "#10D9A0" : "#F25767" }}
+                          >
+                            {rupees(h.unrealised_pnl)}
+                          </span>
+                          <span
+                            className="text-[10px]"
+                            style={{ color: h.unrealised_pnl >= 0 ? "#10D9A0" : "#F25767" }}
+                          >
+                            {pct(h.unrealised_pnl_pct)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => startSell(h)}
+                          className="rounded-xl px-3 py-1.5 text-xs font-semibold transition"
+                          style={{
+                            background: "rgb(242 87 103 / 0.1)",
+                            border: "1px solid rgb(242 87 103 / 0.25)",
+                            color: "#F25767",
+                          }}
+                        >
+                          Sell
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* ── Sell modal — dark theme ── */}
+      {/* Sell modal */}
       {selling && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-40 flex items-center justify-center p-4"
+          style={{ background: "rgb(5 5 16 / 0.85)", backdropFilter: "blur(8px)" }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelling(null);
           }}
         >
-          <div className="card-raised w-full max-w-md animate-rise rounded-2xl p-6">
-            <div className="mb-1 flex items-start justify-between">
-              <div>
-                <h2 className="font-display text-lg font-bold text-white">
-                  Sell {selling.symbol}
-                </h2>
-                <p className="text-sm text-muted">
-                  Holding {selling.quantity} · live{" "}
-                  <span className="font-mono text-fg">{rupees(selling.live_price)}</span>
-                  {" · "}avg{" "}
-                  <span className="font-mono text-fg">{rupees(selling.avg_cost)}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => setSelling(null)}
-                aria-label="Close"
-                className="ml-4 rounded-lg p-1.5 text-subtle transition hover:bg-elev-3 hover:text-fg"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M4 4l8 8M12 4L4 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                </svg>
-              </button>
-            </div>
+          <div
+            className="relative w-full max-w-md overflow-hidden rounded-2xl p-6"
+            style={{
+              background: "#0B0B1B",
+              border: "1px solid rgb(242 87 103 / 0.3)",
+              boxShadow: "0 24px 64px -12px rgb(242 87 103 / 0.2)",
+            }}
+          >
+            <div
+              className="absolute inset-x-0 top-0 h-px"
+              style={{ background: "linear-gradient(90deg, transparent, #F25767, transparent)" }}
+              aria-hidden
+            />
+            <h2 className="font-display text-lg font-bold text-white mb-1">
+              Sell <span style={{ color: "#F25767" }}>{selling.symbol}</span>
+            </h2>
+            <p className="text-sm text-muted mb-4">
+              You hold {selling.quantity} · live {rupees(selling.live_price)} · avg{" "}
+              {rupees(selling.avg_cost)}
+            </p>
 
-            <div className="mt-5">
-              <label className="label block">Quantity</label>
-              <div className="mt-1.5 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setQty(q => Math.max(1, q - 1))}
-                  className="rounded-lg border border-hairline-strong bg-elev-2 px-3 py-2 text-sm text-fg hover:bg-elev-3"
-                >−</button>
-                <input
-                  type="number"
-                  min={1}
-                  max={selling.quantity}
-                  value={qty}
-                  onChange={(e) =>
-                    setQty(Math.min(selling.quantity, Math.max(1, parseInt(e.target.value || "1", 10))))
-                  }
-                  className="w-full rounded-lg border border-hairline-strong bg-elev-3 px-3 py-2 text-center text-sm text-fg outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-                />
-                <button
-                  type="button"
-                  onClick={() => setQty(q => Math.min(selling.quantity, q + 1))}
-                  className="rounded-lg border border-hairline-strong bg-elev-2 px-3 py-2 text-sm text-fg hover:bg-elev-3"
-                >+</button>
-              </div>
-              <p className="mt-1.5 text-xs text-subtle">
-                Proceeds: <span className="font-mono text-fg">{rupees(selling.live_price * qty)}</span>
+            <div className="mb-4">
+              <label className="label mb-1.5 block">Quantity</label>
+              <input
+                type="number"
+                min={1}
+                max={selling.quantity}
+                value={qty}
+                onChange={(e) =>
+                  setQty(Math.min(selling.quantity, Math.max(1, parseInt(e.target.value || "1", 10))))
+                }
+                className="w-full rounded-xl px-3.5 py-2.5 text-sm text-white"
+                style={{
+                  background: "rgb(124 58 237 / 0.06)",
+                  border: "1px solid rgb(124 58 237 / 0.3)",
+                  outline: "none",
+                }}
+              />
+              <p className="mt-1.5 text-xs text-muted">
+                Proceeds: <span className="text-white font-semibold">{rupees(selling.live_price * qty)}</span>
               </p>
             </div>
 
-            {error && <p role="alert" className="mt-3 text-sm text-neg">{error}</p>}
+            {error && (
+              <p className="mb-3 rounded-lg px-3 py-2 text-sm" style={{ background: "rgb(242 87 103 / 0.1)", color: "#F25767", border: "1px solid rgb(242 87 103 / 0.25)" }}>
+                {error}
+              </p>
+            )}
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setSelling(null)}
-                className="btn-ghost rounded-lg px-4 py-2 text-sm"
+                className="rounded-xl px-4 py-2 text-sm font-semibold transition"
+                style={{ background: "rgb(255 255 255 / 0.04)", border: "1px solid rgb(255 255 255 / 0.1)", color: "#A1A1B5" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handlePreview}
                 disabled={busy}
-                className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                className="rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
+                style={{
+                  background: "linear-gradient(135deg, #be123c, #f25767)",
+                  color: "#fff",
+                  boxShadow: "0 4px 16px -4px rgb(242 87 103 / 0.4)",
+                }}
               >
-                {busy ? "Checking..." : "Preview sell"}
+                {busy ? "Checking…" : "Preview sell"}
               </button>
             </div>
           </div>

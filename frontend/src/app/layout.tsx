@@ -87,19 +87,19 @@ export default function RootLayout({
           Skip to main content
         </a>
 
-        {/* Fixed blueprint grid behind everything. Fixed rather than scrolling so
-            content moves against a stable ground, which reads as depth. */}
+        {/* Futuristic grid background */}
         <div
           aria-hidden
-          className="grid-bg pointer-events-none fixed inset-0 z-0 opacity-70"
+          className="grid-bg pointer-events-none fixed inset-0 z-0"
         />
-        {/* Vignette, so the grid fades out at the edges instead of stopping. */}
+        {/* Deep atmospheric glow at top */}
         <div
           aria-hidden
           className="pointer-events-none fixed inset-0 z-0"
           style={{
             background:
-              "radial-gradient(120% 80% at 50% 0%, transparent 40%, rgb(6 7 13 / 0.85) 100%)",
+              "radial-gradient(ellipse 80% 50% at 50% -10%, rgb(124 58 237 / 0.12) 0%, transparent 70%), " +
+              "radial-gradient(ellipse 60% 40% at 80% 60%, rgb(34 211 238 / 0.05) 0%, transparent 70%)",
           }}
         />
 

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import dynamic from "next/dynamic";
 import { fetcher, type ConceptProgress, type InterventionLogItem } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { Card, CardHeader } from "@/components/Card";
@@ -11,12 +10,6 @@ import { PatternPanel } from "@/components/PatternPanel";
 import { ReflectionHistory } from "@/components/ReflectionHistory";
 import { RetestPanel } from "@/components/RetestPanel";
 import { severityClasses } from "@/lib/format";
-import { LazyCanvas } from "@/components/three/LazyCanvas";
-
-const CoachOrbScene = dynamic(
-  () => import("@/components/three/CoachOrbScene").then((m) => m.CoachOrbScene),
-  { ssr: false }
-);
 
 export default function CoachPage() {
   const userId = useRequireUser();
@@ -32,27 +25,33 @@ export default function CoachPage() {
 
   if (!userId) return null;
 
+  const concepts = Array.from(
+    new Set(logs?.map((l) => l.concept).filter(Boolean) as string[]),
+  );
+
   return (
     <div className="space-y-6">
-      <header className="flex items-center gap-5">
-        <LazyCanvas
-          className="h-[90px] w-[90px] shrink-0"
-          camera={{ position: [0, 0, 3.5], fov: 50 }}
-        >
-          <CoachOrbScene isThinking={false} />
-        </LazyCanvas>
-        <div>
-          <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
-          <p className="mt-1 text-sm text-muted">
-            Every warning the coach fired and what you did with it.
-          </p>
-        </div>
+      <header className="animate-rise">
+        <p className="label mb-1" style={{ color: "#A855F7" }}>Behaviour</p>
+        <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
+        <p className="mt-1 text-sm text-muted">
+          Every warning the coach fired and what you did with it.
+        </p>
       </header>
 
+      {/* Named habits first. A learner arriving here wants to know what they
+          keep doing, not to scroll a chronological log looking for it. */}
       <PatternPanel userId={userId} />
+
+      {/* Anything they've failed, with a route to genuinely new questions. */}
       <RetestPanel userId={userId} />
+
+      {/* Then their own words. Reading past reasons together is where the habit
+          becomes visible to the learner themselves. */}
       <ReflectionHistory userId={userId} />
 
+      {/* Which lessons are landing and which keep tripping them up. This is the
+          learner's own behavioural mirror, not just a list of past events. */}
       {progress && progress.length > 0 && (
         <Card>
           <CardHeader
@@ -63,26 +62,26 @@ export default function CoachPage() {
             {progress.map((p) => (
               <li
                 key={p.concept}
-                className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-hairline bg-elev-2 p-3 transition hover:border-hairline-strong"
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-slate-200 p-3"
               >
                 <div className="min-w-[9rem] flex-1">
                   <Link
                     href={`/learn/${p.concept}`}
-                    className="text-sm font-medium capitalize text-fg hover:text-brand hover:underline"
+                    className="text-sm font-medium capitalize text-slate-900 hover:text-indigo-700 hover:underline"
                   >
                     {p.concept.replaceAll("_", " ")}
                   </Link>
-                  <p className="text-xs text-subtle">
+                  <p className="text-xs text-slate-500">
                     fired {p.fired}× · heeded {p.heeded} · overridden {p.ignored}
                   </p>
                 </div>
 
                 {p.heed_rate !== null && (
                   <span
-                    className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       p.heed_rate >= 50
-                        ? "border-pos/25 bg-pos/10 text-pos"
-                        : "border-warn/25 bg-warn/10 text-warn"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-800"
                     }`}
                   >
                     {p.heed_rate.toFixed(0)}% heeded
@@ -90,13 +89,13 @@ export default function CoachPage() {
                 )}
 
                 {p.quiz_passed ? (
-                  <span className="rounded-full border border-pos/25 bg-pos/10 px-2 py-0.5 text-xs font-medium text-pos">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     quiz passed
                   </span>
                 ) : (
                   <Link
                     href={`/coach/quiz/${p.concept}`}
-                    className="rounded-full border border-brand/25 bg-brand/10 px-3 py-1 text-xs font-medium text-brand hover:bg-brand/20"
+                    className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
                   >
                     take quiz →
                   </Link>
@@ -107,15 +106,15 @@ export default function CoachPage() {
         </Card>
       )}
 
-      {!progress?.length && !logs?.length && (
+      {concepts.length === 0 && (!progress || progress.length === 0) && (
         <Card>
           <CardHeader
             title="Nothing to review yet"
             subtitle="Warnings appear here once you start trading"
           />
-          <p className="text-sm text-muted">
+          <p className="text-sm text-slate-600">
             You can get ahead of them in the{" "}
-            <Link href="/learn" className="text-brand hover:underline">
+            <Link href="/learn" className="text-indigo-600 underline">
               concept library
             </Link>
             , which covers every idea DolFin coaches on.
@@ -131,19 +130,21 @@ export default function CoachPage() {
         {logsError ? (
           <ErrorState error={logsError} label="Couldn't load your history" />
         ) : !logs || logs.length === 0 ? (
-          <p className="text-sm text-subtle">No interventions yet.</p>
+          <p className="text-sm text-slate-500">No interventions yet.</p>
         ) : (
-          <ul className="divide-y divide-hairline text-sm">
+          <ul className="divide-y divide-slate-100 text-sm">
             {logs.map((l) => {
               const cls = severityClasses(l.severity);
               return (
                 <li key={l.id} className="py-3">
-                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls.badge}`}>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls.badge}`}
+                    >
                       {l.severity}
                     </span>
                     <strong className={cls.text}>{l.title}</strong>
-                    <span className="text-xs text-subtle">
+                    <span className="text-xs text-slate-400">
                       {new Date(l.created_at).toLocaleString()}
                     </span>
                     {l.user_action && (
@@ -157,21 +158,21 @@ export default function CoachPage() {
                         }
                         className={`ml-auto rounded-full px-2 py-0.5 text-[10px] uppercase ${
                           l.user_action === "heeded"
-                            ? "bg-pos/10 text-pos"
+                            ? "bg-emerald-100 text-emerald-700"
                             : l.user_action === "ignored"
-                            ? "bg-warn/10 text-warn"
-                            : "bg-elev-3 text-subtle"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-slate-100 text-slate-500"
                         }`}
                       >
                         {l.user_action === "ignored" ? "overridden" : l.user_action}
                       </span>
                     )}
                   </div>
-                  <p className="text-muted">{l.message}</p>
+                  <p className="text-slate-700">{l.message}</p>
                   {l.concept && (
                     <Link
                       href={`/learn/${l.concept}`}
-                      className="mt-1 inline-block text-xs text-brand hover:underline"
+                      className="mt-1 inline-block text-xs text-indigo-600 hover:underline"
                     >
                       Learn about {l.concept.replaceAll("_", " ")} →
                     </Link>

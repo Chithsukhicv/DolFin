@@ -15,14 +15,6 @@ import { fetcher, type EquityPoint } from "@/lib/api";
 import { rupees } from "@/lib/format";
 import { EmptyState } from "./States";
 
-/**
- * Portfolio value over time.
- *
- * This chart is the payoff for the whole crash-simulator idea. Telling someone
- * "holding through a downturn beats selling" is an assertion; showing them the
- * dip and recovery on their own portfolio is evidence. Scenario boundaries are
- * marked so the crash is identifiable rather than just a wobble.
- */
 export function EquityCurve({ userId }: { userId: string }) {
   const { data } = useSWR<EquityPoint[]>(
     userId ? `/history/equity/${userId}` : null,
@@ -64,18 +56,24 @@ export function EquityCurve({ userId }: { userId: string }) {
   const scenarioStarts = points.filter((p) => p.reason === "scenario_start");
   const trough = points.reduce((lo, p) => (p.total_value < lo.total_value ? p : lo), points[0]);
 
-  const strokeColor = up ? "#00D6A0" : "#FF6B6B";
-  const fillId = up ? "equityFillUp" : "equityFillDown";
+  const strokeColour = up ? "#10D9A0" : "#F25767";
+  const gradientId = up ? "equityFillUp" : "equityFillDown";
 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="metric text-2xl font-bold text-white">{rupees(last)}</span>
-        <span className={`text-sm font-medium ${up ? "text-pos" : "text-neg"}`}>
-          {up ? "+" : ""}
-          {rupees(change)} ({changePct.toFixed(1)}%)
+        <span
+          className="rounded-lg px-2 py-0.5 font-mono text-xs font-semibold"
+          style={
+            up
+              ? { background: "rgb(16 217 160 / 0.12)", border: "1px solid rgb(16 217 160 / 0.25)", color: "#10D9A0" }
+              : { background: "rgb(242 87 103 / 0.12)", border: "1px solid rgb(242 87 103 / 0.25)", color: "#F25767" }
+          }
+        >
+          {up ? "+" : ""}{rupees(change)} ({changePct.toFixed(1)}%)
         </span>
-        <span className="text-xs text-subtle">since you started</span>
+        <span className="text-xs text-muted">since you started</span>
       </div>
 
       <div className="h-56 w-full">
@@ -83,26 +81,26 @@ export function EquityCurve({ userId }: { userId: string }) {
           <AreaChart data={points} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="equityFillUp" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#00D6A0" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#00D6A0" stopOpacity={0} />
+                <stop offset="0%" stopColor="#10D9A0" stopOpacity={0.28} />
+                <stop offset="100%" stopColor="#10D9A0" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="equityFillDown" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FF6B6B" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#FF6B6B" stopOpacity={0} />
+                <stop offset="0%" stopColor="#F25767" stopOpacity={0.28} />
+                <stop offset="100%" stopColor="#F25767" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(124 58 237 / 0.1)" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: "#949aa6" }}
+              tick={{ fontSize: 11, fill: "#6b6b85" }}
               interval="preserveStartEnd"
               minTickGap={30}
-              axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+              axisLine={{ stroke: "rgb(124 58 237 / 0.15)" }}
               tickLine={false}
             />
             <YAxis
               domain={[min - pad, max + pad]}
-              tick={{ fontSize: 11, fill: "#949aa6" }}
+              tick={{ fontSize: 11, fill: "#6b6b85" }}
               tickFormatter={(v) => `${Math.round(v / 1000)}k`}
               width={44}
               axisLine={false}
@@ -132,17 +130,17 @@ export function EquityCurve({ userId }: { userId: string }) {
               contentStyle={{
                 fontSize: 12,
                 borderRadius: 10,
-                background: "var(--elev-3)",
-                border: "1px solid var(--hairline-strong)",
-                color: "var(--fg)",
+                background: "#0B0B1B",
+                border: "1px solid rgb(124 58 237 / 0.3)",
+                color: "#F8FAFC",
               }}
             />
             <Area
               type="monotone"
               dataKey="total_value"
-              stroke={strokeColor}
+              stroke={strokeColour}
               strokeWidth={2}
-              fill={`url(#${fillId})`}
+              fill={`url(#${gradientId})`}
             />
             {scenarioStarts.map((p) => (
               <ReferenceDot
@@ -150,8 +148,8 @@ export function EquityCurve({ userId }: { userId: string }) {
                 x={p.label}
                 y={p.total_value}
                 r={4}
-                fill="#fdd663"
-                stroke="rgba(255,255,255,0.2)"
+                fill="#F5A623"
+                stroke="#050510"
                 strokeWidth={1.5}
               />
             ))}
@@ -159,7 +157,7 @@ export function EquityCurve({ userId }: { userId: string }) {
         </ResponsiveContainer>
       </div>
 
-      <p className="mt-2 text-xs text-subtle">
+      <p className="mt-2 text-xs text-muted">
         {scenarioStarts.length > 0 ? (
           <>
             Amber dots mark where you started a scenario. Lowest point so far:{" "}

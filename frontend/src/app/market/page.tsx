@@ -2,26 +2,18 @@
 
 import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
-import dynamic from "next/dynamic";
 import { api, fetcher, type PreviewResult, type Quote, type Stock } from "@/lib/api";
 import { useRequireUser } from "@/lib/useSession";
 import { rupees, pct } from "@/lib/format";
-import { Card, CardHeader } from "@/components/Card";
 import { InterventionModal } from "@/components/InterventionModal";
 import { PriceChart } from "@/components/PriceChart";
 import { ErrorState, StaleBadge } from "@/components/States";
 import Link from "next/link";
-import { LazyCanvas } from "@/components/three/LazyCanvas";
 
-const MarketScene = dynamic(
-  () => import("@/components/three/MarketScene").then((m) => m.MarketScene),
-  { ssr: false }
-);
-
-const RISK_STYLES: Record<string, string> = {
-  low:    "bg-pos/12 text-pos border-pos/25",
-  medium: "bg-warn/12 text-warn border-warn/25",
-  high:   "bg-neg/12 text-neg border-neg/25",
+const RISK_COLOUR: Record<string, string> = {
+  low: "#10D9A0",
+  medium: "#F5A623",
+  high: "#F25767",
 };
 
 export default function MarketPage() {
@@ -47,157 +39,190 @@ export default function MarketPage() {
   if (!userId) return null;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-      {/* ── Stock list ── */}
-      <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <header className="animate-rise">
+        <p className="label mb-1" style={{ color: "#22D3EE" }}>Terminal</p>
         <h1 className="font-display text-2xl font-bold text-white">Market</h1>
+        <p className="mt-1 text-sm text-muted">
+          Live NSE prices · Practice money only
+        </p>
+      </header>
 
-        {/* 3D Market visualization — decorative */}
-        <div className="relative overflow-hidden rounded-2xl border border-hairline">
-          <LazyCanvas
-            className="h-[160px] w-full"
-            camera={{ position: [0, 3.5, 4], fov: 55 }}
-          >
-            <MarketScene />
-          </LazyCanvas>
-          <div className="absolute bottom-2 right-3 rounded bg-black/50 px-2 py-0.5 text-[10px] text-subtle backdrop-blur-sm">
-            Visualisation only — not real market data
-          </div>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        {/* Stock list panel */}
+        <div
+          className="relative overflow-hidden rounded-2xl"
+          style={{
+            background: "rgb(11 11 27 / 0.9)",
+            border: "1px solid rgb(34 211 238 / 0.2)",
+            boxShadow: "0 0 24px -8px rgb(34 211 238 / 0.1)",
+          }}
+        >
+          <div
+            className="absolute inset-x-0 top-0 h-px"
+            style={{ background: "linear-gradient(90deg, transparent, #22D3EE, transparent)" }}
+            aria-hidden
+          />
 
-        {stocksError && <ErrorState error={stocksError} label="Couldn't load the catalogue" />}
-
-        {/* Search + filter bar */}
-        <div className="flex flex-wrap gap-2">
-          <div className="flex-1">
-            <label htmlFor="stock-search" className="sr-only">Search stocks</label>
-            <div className="relative">
-              <svg
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
-                width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          {/* Filters */}
+          <div className="p-4 flex flex-wrap gap-3" style={{ borderBottom: "1px solid rgb(34 211 238 / 0.1)" }}>
+            <div className="flex-1 min-w-[160px]">
+              <label htmlFor="stock-search" className="sr-only">Search stocks</label>
+              <div className="relative">
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2"
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  style={{ color: "#6b6b85" }}
+                  aria-hidden
+                >
+                  <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+                  <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <input
+                  id="stock-search"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name or symbol…"
+                  className="w-full rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder:text-muted outline-none"
+                  style={{
+                    background: "rgb(124 58 237 / 0.06)",
+                    border: "1px solid rgb(124 58 237 / 0.2)",
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="sector-filter" className="sr-only">Filter by sector</label>
+              <select
+                id="sector-filter"
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                className="rounded-xl px-3 py-2 text-sm text-white outline-none"
+                style={{
+                  background: "rgb(124 58 237 / 0.06)",
+                  border: "1px solid rgb(124 58 237 / 0.2)",
+                  color: sector ? "#A855F7" : "#A1A1B5",
+                }}
               >
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-              </svg>
-              <input
-                id="stock-search"
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name or symbol…"
-                className="w-full rounded-xl border border-hairline-strong bg-elev-2 py-2.5 pl-9 pr-3 text-sm text-fg placeholder:text-subtle outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-              />
+                <option value="">All sectors</option>
+                {sectors?.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
           </div>
-          <div>
-            <label htmlFor="sector-filter" className="sr-only">Filter by sector</label>
-            <select
-              id="sector-filter"
-              value={sector}
-              onChange={(e) => setSector(e.target.value)}
-              className="rounded-xl border border-hairline-strong bg-elev-2 px-3 py-2.5 text-sm text-fg"
-            >
-              <option value="">All sectors</option>
-              {sectors?.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
 
-        {/* Results count */}
-        <p aria-live="polite" className="sr-only">{filtered.length} instruments match</p>
+          {stocksError && <ErrorState error={stocksError} label="Couldn't load the catalogue" />}
 
-        <Card className="overflow-hidden !p-0">
-          <ul className="divide-y divide-hairline">
+          <p aria-live="polite" className="sr-only">{filtered.length} instruments match</p>
+
+          <ul>
             {filtered.map((s) => {
               const isFund = s.sector === "Index Fund";
               const isSelected = selected?.symbol === s.symbol;
-              const riskStyle = RISK_STYLES[s.risk_level?.toLowerCase() ?? ""] ?? RISK_STYLES.medium;
+              const riskCol = RISK_COLOUR[s.risk_level] ?? "#A1A1B5";
               return (
                 <li key={s.symbol}>
                   <button
                     type="button"
                     onClick={() => setSelected(s)}
                     aria-pressed={isSelected}
-                    className={`flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                      isSelected
-                        ? "bg-brand/10 border-l-2 border-l-brand"
-                        : "hover:bg-elev-2"
-                    }`}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition focus:outline-none"
+                    style={{
+                      background: isSelected ? "rgb(34 211 238 / 0.07)" : undefined,
+                      borderBottom: "1px solid rgb(124 58 237 / 0.07)",
+                      borderLeft: isSelected ? "2px solid #22D3EE" : "2px solid transparent",
+                    }}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-fg">{s.name}</p>
+                        <p className="truncate text-sm font-semibold text-white">{s.name}</p>
                         {isFund && (
-                          <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-300">
-                            fund
+                          <span
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                            style={{
+                              background: "rgb(79 124 255 / 0.15)",
+                              border: "1px solid rgb(79 124 255 / 0.3)",
+                              color: "#4F7CFF",
+                            }}
+                          >
+                            FUND
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-subtle">
-                        <span className="font-mono font-medium text-muted">{s.symbol}</span>
-                        <span>·</span>
-                        <span>{s.sector}</span>
-                        {!isFund && (
-                          <>
-                            <span>·</span>
-                            <span className={`rounded-full border px-1.5 py-px text-[10px] font-semibold uppercase ${riskStyle}`}>
-                              {s.risk_level}
-                            </span>
-                          </>
-                        )}
-                      </div>
+                      <p className="text-xs text-muted">
+                        <span className="font-mono">{s.symbol}</span> · {s.sector}
+                        {!isFund && ` · ${s.market_cap_band}-cap`}
+                      </p>
                     </div>
-                    <span aria-hidden="true" className={`shrink-0 text-xs transition ${isSelected ? "text-brand" : "text-subtle"}`}>
-                      →
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                        style={{
+                          background: `${riskCol}15`,
+                          color: riskCol,
+                          border: `1px solid ${riskCol}30`,
+                        }}
+                      >
+                        {s.risk_level}
+                      </span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: isSelected ? "#22D3EE" : "#44445a" }}>
+                        <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
                   </button>
                 </li>
               );
             })}
+            {filtered.length === 0 && !stocksError && (
+              <li className="py-8 text-center text-sm text-muted">
+                No matches. Try clearing the sector filter.
+              </li>
+            )}
           </ul>
+        </div>
 
-          {filtered.length === 0 && !stocksError && (
-            <p className="py-8 text-center text-sm text-subtle">
-              No matches. Try clearing the sector filter.
-            </p>
-          )}
-        </Card>
-
-        <p className="text-xs text-subtle">
-          Index funds hold dozens of companies at once — one purchase is already diversified.{" "}
-          <Link href="/learn/index_funds" className="text-brand hover:underline">
-            How index funds work →
-          </Link>
-        </p>
-      </div>
-
-      {/* ── Buy panel ── */}
-      <div>
-        {selected ? (
-          <BuyPanel
-            userId={userId}
-            stock={selected}
-            onTradeDone={() => {
-              mutate(`/portfolio/${userId}`);
-              mutate(`/users/${userId}`);
-            }}
-          />
-        ) : (
-          <Card>
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-elev-3">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-subtle">
-                  <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+        {/* Buy panel */}
+        <div className="lg:sticky lg:top-24">
+          {selected ? (
+            <BuyPanel
+              userId={userId}
+              stock={selected}
+              onTradeDone={() => {
+                mutate(`/portfolio/${userId}`);
+                mutate(`/users/${userId}`);
+              }}
+            />
+          ) : (
+            <div
+              className="flex flex-col items-center justify-center gap-4 rounded-2xl p-8"
+              style={{
+                background: "rgb(11 11 27 / 0.85)",
+                border: "1px solid rgb(124 58 237 / 0.15)",
+              }}
+            >
+              <div
+                className="flex h-14 w-14 items-center justify-center rounded-full"
+                style={{ background: "rgb(124 58 237 / 0.1)", border: "1px solid rgb(124 58 237 / 0.2)" }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ color: "#7C3AED" }}>
+                  <path d="M3 3h18M3 12h18M3 21h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-fg">Select a stock</p>
-              <p className="mt-1 text-xs text-subtle">
-                Pick one from the list to see its price chart and place a practice trade.
+              <p className="text-center text-sm text-muted">
+                Select a stock from the list to view its price and place a practice trade.
               </p>
             </div>
-          </Card>
-        )}
+          )}
+        </div>
       </div>
+
+      <p className="text-xs text-muted">
+        Index funds hold dozens of companies at once, so one purchase is already diversified.{" "}
+        <Link href="/learn/index_funds" style={{ color: "#22D3EE" }}>
+          How index funds work →
+        </Link>
+      </p>
     </div>
   );
 }
@@ -239,26 +264,27 @@ function BuyPanel({
     }
   }
 
-  const riskStyle = RISK_STYLES[stock.risk_level?.toLowerCase() ?? ""] ?? RISK_STYLES.medium;
-  const dayUp = (quote?.day_change_pct ?? 0) >= 0;
-
   return (
-    <Card className="sticky top-24">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="font-display text-lg font-bold text-white truncate">{stock.name}</h2>
-          <div className="mt-0.5 flex items-center gap-2 text-xs">
-            <span className="font-mono text-muted">{stock.symbol}</span>
-            <span className="text-subtle">·</span>
-            <span className="text-muted">{stock.sector}</span>
-          </div>
-        </div>
-        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${riskStyle}`}>
-          {stock.risk_level}
-        </span>
+    <div
+      className="relative overflow-hidden rounded-2xl p-5"
+      style={{
+        background: "rgb(11 11 27 / 0.9)",
+        border: "1px solid rgb(168 85 247 / 0.2)",
+        boxShadow: "0 0 32px -8px rgb(168 85 247 / 0.15)",
+      }}
+    >
+      <div
+        className="absolute inset-x-0 top-0 h-px"
+        style={{ background: "linear-gradient(90deg, transparent, #A855F7, #22D3EE, transparent)" }}
+        aria-hidden
+      />
+
+      {/* Stock info */}
+      <div className="mb-4">
+        <p className="font-display text-base font-bold text-white">{stock.name}</p>
+        <p className="text-xs text-muted">{stock.symbol} · {stock.sector}</p>
       </div>
 
-      {/* Price display */}
       {quoteError ? (
         <ErrorState error={quoteError} label="Couldn't fetch this price" />
       ) : quote ? (
@@ -270,78 +296,92 @@ function BuyPanel({
             {quote.stale && <StaleBadge />}
           </div>
           {quote.day_change_pct !== null && quote.day_change_pct !== undefined && (
-            <p className={`mt-1 text-sm font-medium ${dayUp ? "text-pos" : "text-neg"}`}>
-              <span aria-hidden>{dayUp ? "▲" : "▼"}</span>{" "}
+            <p
+              className="mt-1 text-sm font-semibold"
+              style={{ color: quote.day_change_pct >= 0 ? "#10D9A0" : "#F25767" }}
+            >
+              <span aria-hidden>{quote.day_change_pct >= 0 ? "▲" : "▼"}</span>{" "}
               {pct(quote.day_change_pct)}
-              {quote.day_change !== null && quote.day_change !== undefined && (
-                <span className="ml-1 opacity-70">({rupees(quote.day_change)})</span>
-              )}
-              <span className="sr-only">{dayUp ? " up" : " down"} today</span>
+              {quote.day_change !== null && quote.day_change !== undefined &&
+                ` (${rupees(quote.day_change)})`}
             </p>
           )}
           {quote.scenario && (
-            <p className="mt-1 text-xs text-warn">
-              Simulated {quote.scenario.kind}: ×{quote.scenario_multiplier?.toFixed(3)} applied.
+            <p
+              className="mt-1 rounded-lg px-3 py-1.5 text-xs"
+              style={{
+                background: "rgb(245 166 35 / 0.08)",
+                border: "1px solid rgb(245 166 35 / 0.2)",
+                color: "#F5A623",
+              }}
+            >
+              Simulated {quote.scenario.kind}: ×{quote.scenario_multiplier?.toFixed(3)} applied
             </p>
           )}
         </div>
       ) : (
-        <div className="mb-4 h-12 rounded-lg bg-elev-2 animate-pulse" />
+        <p className="mb-4 text-sm text-muted">Loading price…</p>
       )}
 
       {/* Price chart */}
-      <div className="border-t border-hairline pt-3">
+      <div
+        className="mb-4 overflow-hidden rounded-xl p-3"
+        style={{ background: "rgb(124 58 237 / 0.04)", border: "1px solid rgb(124 58 237 / 0.12)" }}
+      >
         <PriceChart symbol={stock.symbol} />
       </div>
 
-      {/* Trade form */}
-      <div className="mt-4 space-y-3">
-        <div>
-          <label htmlFor="trade-qty" className="label block mb-1.5">Quantity</label>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setQty(q => Math.max(1, q - 1))}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline-strong bg-elev-2 text-lg text-fg hover:bg-elev-3"
-            >−</button>
-            <input
-              id="trade-qty"
-              type="number"
-              min={1}
-              step={1}
-              value={qty}
-              onChange={(e) => setQty(Math.max(1, parseInt(e.target.value || "1", 10)))}
-              className="w-full rounded-lg border border-hairline-strong bg-elev-3 px-3 py-2 text-center text-sm text-fg outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-            />
-            <button
-              type="button"
-              onClick={() => setQty(q => q + 1)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline-strong bg-elev-2 text-lg text-fg hover:bg-elev-3"
-            >+</button>
-          </div>
-          {quote && (
-            <p className="mt-1.5 text-xs text-subtle">
-              Estimated cost:{" "}
-              <span className="font-mono text-fg">{rupees(quote.price * qty)}</span>{" "}
-              <span className="text-faint">(plus 0.05% fee)</span>
-            </p>
-          )}
-        </div>
-
-        {error && <p role="alert" className="text-sm text-neg">{error}</p>}
-
-        <button
-          onClick={handleBuy}
-          disabled={busy || !quote}
-          className="btn-primary w-full rounded-xl px-4 py-3 font-semibold disabled:opacity-50"
-        >
-          {busy ? "Checking…" : "Preview practice buy"}
-        </button>
-
-        <p className="text-center text-[10px] text-faint">
-          This is a simulated trade — no real money is involved.
-        </p>
+      {/* Quantity input */}
+      <div className="mb-4">
+        <label htmlFor="trade-qty" className="label mb-1.5 block">Quantity</label>
+        <input
+          id="trade-qty"
+          type="number"
+          min={1}
+          step={1}
+          value={qty}
+          onChange={(e) => setQty(Math.max(1, parseInt(e.target.value || "1", 10)))}
+          className="w-full rounded-xl px-3.5 py-2.5 text-sm text-white outline-none"
+          style={{
+            background: "rgb(124 58 237 / 0.06)",
+            border: "1px solid rgb(124 58 237 / 0.25)",
+          }}
+        />
+        {quote && (
+          <p className="mt-1.5 text-xs text-muted">
+            Estimated cost:{" "}
+            <span className="metric font-semibold text-white">{rupees(quote.price * qty)}</span>
+            {" "}<span style={{ color: "#44445a" }}>(+ 0.05% fee)</span>
+          </p>
+        )}
       </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="mb-3 rounded-xl px-3 py-2 text-sm"
+          style={{
+            background: "rgb(242 87 103 / 0.08)",
+            border: "1px solid rgb(242 87 103 / 0.25)",
+            color: "#F25767",
+          }}
+        >
+          {error}
+        </p>
+      )}
+
+      <button
+        onClick={handleBuy}
+        disabled={busy || !quote}
+        className="w-full rounded-xl px-4 py-3 font-bold text-sm transition disabled:opacity-50"
+        style={{
+          background: "linear-gradient(135deg, #10D9A0 0%, #059669 100%)",
+          color: "#fff",
+          boxShadow: "0 4px 20px -4px rgb(16 217 160 / 0.4)",
+        }}
+      >
+        {busy ? "Checking…" : "Preview Buy"}
+      </button>
 
       {preview && (
         <InterventionModal
@@ -357,6 +397,6 @@ function BuyPanel({
           }}
         />
       )}
-    </Card>
+    </div>
   );
 }
