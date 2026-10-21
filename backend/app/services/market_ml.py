@@ -114,33 +114,37 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     out["ret_5d"]  = close.pct_change(5)
     out["ret_10d"] = close.pct_change(10)
 
-    # --- Simple moving averages ---
-    out["sma_5"]  = close.rolling(5).mean()
-    out["sma_10"] = close.rolling(10).mean()
-    out["sma_20"] = close.rolling(20).mean()
-    out["sma_50"] = close.rolling(50).mean()
+    # --- Simple moving averages (percentage distance from moving average) ---
+    sma_5  = close.rolling(5).mean()
+    sma_10 = close.rolling(10).mean()
+    sma_20 = close.rolling(20).mean()
+    sma_50 = close.rolling(50).mean()
+    out["sma_5"]  = (close - sma_5) / sma_5
+    out["sma_10"] = (close - sma_10) / sma_10
+    out["sma_20"] = (close - sma_20) / sma_20
+    out["sma_50"] = (close - sma_50) / sma_50
 
-    # --- Exponential moving averages ---
+    # --- Exponential moving averages (percentage distance from EMA) ---
     ema_12 = close.ewm(span=12, adjust=False).mean()
     ema_26 = close.ewm(span=26, adjust=False).mean()
-    out["ema_12"] = ema_12
-    out["ema_26"] = ema_26
+    out["ema_12"] = (close - ema_12) / ema_12
+    out["ema_26"] = (close - ema_26) / ema_26
 
-    # --- MACD ---
+    # --- MACD (normalized by close price) ---
     macd = ema_12 - ema_26
     macd_signal = macd.ewm(span=9, adjust=False).mean()
-    out["macd"]        = macd
-    out["macd_signal"] = macd_signal
-    out["macd_hist"]   = macd - macd_signal
+    out["macd"]        = macd / close
+    out["macd_signal"] = macd_signal / close
+    out["macd_hist"]   = (macd - macd_signal) / close
 
-    # --- RSI (Wilder smoothing) ---
+    # --- RSI (Wilder smoothing, normalized to [0, 1]) ---
     delta = close.diff()
     gain  = delta.clip(lower=0)
     loss  = (-delta).clip(lower=0)
     avg_gain = gain.ewm(alpha=1 / 14, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / 14, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
-    out["rsi_14"] = (100 - 100 / (1 + rs)).clip(0, 100)
+    out["rsi_14"] = (100 - 100 / (1 + rs)).clip(0, 100) / 100.0
 
     # --- Rolling volatility of log returns ---
     log_ret = np.log(close / close.shift(1))
@@ -148,23 +152,23 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     out["vol_10"] = log_ret.rolling(10).std()
     out["vol_20"] = log_ret.rolling(20).std()
 
-    # --- Average True Range (Wilder) ---
+    # --- Average True Range (Wilder, normalized by close price) ---
     prev_close = close.shift(1)
     tr = pd.concat([
         high - low,
         (high - prev_close).abs(),
         (low  - prev_close).abs(),
     ], axis=1).max(axis=1)
-    out["atr_14"] = tr.ewm(alpha=1 / 14, adjust=False).mean()
+    out["atr_14"] = tr.ewm(alpha=1 / 14, adjust=False).mean() / close
 
     # --- Volume features ---
-    out["vol_chg"] = vol.pct_change(1)
+    out["vol_chg"] = vol.pct_change(1).clip(-1.0, 5.0)
     vol_ma20 = vol.rolling(20).mean()
-    out["rel_vol"] = vol / vol_ma20.replace(0, np.nan)
+    out["rel_vol"] = (vol / vol_ma20.replace(0, np.nan)).clip(0.0, 10.0)
 
-    # --- Rate of change (momentum) ---
-    out["roc_5"]  = close.pct_change(5)
-    out["roc_10"] = close.pct_change(10)
+    # --- Rate of change / momentum acceleration ---
+    out["roc_5"]  = close.pct_change(5) - close.pct_change(10)
+    out["roc_10"] = close.pct_change(10) - close.pct_change(20)
     out["roc_20"] = close.pct_change(20)
 
     # Drop rows where any feature is NaN / Inf.
@@ -349,7 +353,12 @@ def _predict_horizon(
     X = features[FEATURE_COLUMNS].iloc[-1:]
 
     try:
-        proba = pipeline.predict_proba(X)[0]
+        # Pass numpy array or dataframe consistently, suppressing sklearn feature name warnings if fitted as array
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*X has feature names.*")
+            warnings.filterwarnings("ignore", message=".*X does not have valid feature names.*")
+            proba = pipeline.predict_proba(X)[0]
     except Exception as exc:
         log.error("predict_proba failed for scope=%s horizon=%d: %s", scope, horizon, exc)
         return HorizonForecast(
@@ -368,17 +377,24 @@ def _predict_horizon(
     classes = list(pipeline.classes_)
     prob_map: dict[str, float] = {c: float(proba[i]) for i, c in enumerate(classes)}
 
-    p_up   = prob_map.get("UP",       0.0)
-    p_side = prob_map.get("SIDEWAYS", 0.0)
-    p_down = prob_map.get("DOWN",     0.0)
+    p_up   = float(np.nan_to_num(prob_map.get("UP",       0.0), nan=0.0))
+    p_side = float(np.nan_to_num(prob_map.get("SIDEWAYS", 0.0), nan=0.0))
+    p_down = float(np.nan_to_num(prob_map.get("DOWN",     0.0), nan=0.0))
 
-    # Normalise if the sum is slightly off (floating-point)
+    # Normalise so that probabilities sum to 1.0 and remain strictly within [0, 1]
     total = p_up + p_side + p_down
-    if total > 0 and not (0.99 <= total <= 1.01):
+    if total > 0:
         p_up   /= total
         p_side /= total
         p_down /= total
+    else:
+        p_up, p_side, p_down = 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
 
+    p_up   = float(np.clip(p_up, 0.0, 1.0))
+    p_side = float(np.clip(p_side, 0.0, 1.0))
+    p_down = float(np.clip(p_down, 0.0, 1.0))
+
+    prob_map = {"UP": p_up, "SIDEWAYS": p_side, "DOWN": p_down}
     predicted_class = max(prob_map, key=prob_map.get)  # type: ignore[arg-type]
     uncertainty = max(p_up, p_side, p_down) < 0.45
 
