@@ -45,6 +45,7 @@ CONTEXT_MESSAGES = 6
 MAX_QUESTION_CHARS = 500
 CORPUS_A_TOP_K = 5
 CORPUS_B_TOP_K = 4
+CORPUS_C_TOP_K = 3   # live news — small K keeps the prompt tight
 
 # Words that mean the question is about the learner rather than about finance in
 # general. Their presence widens retrieval into Corpus B (R7.3).
@@ -61,6 +62,15 @@ _PERSONAL_TOPICS = re.compile(
 _PRICE_CUES = re.compile(
     r"\b(price|quote|trading at|worth|value|cost|how much|current|today|"
     r"up or down|gained|dropped|fell|rose)\b",
+    re.I,
+)
+
+# Words that suggest the learner wants current market context.
+# Corpus C is always retrieved but these cues signal higher relevance.
+_NEWS_CUES = re.compile(
+    r"\b(news|today|latest|recent|happened|market|nifty|sensex|crash|rally|"
+    r"why did|why is|fell|dropped|rose|gained|budget|rbi|sebi|inflation|"
+    r"recession|earnings|results|quarter)\b",
     re.I,
 )
 
@@ -342,12 +352,18 @@ def _ask(db: Session, user: User, question: str, *, session_id: str | None) -> d
     corpus_b = retrieval.retrieve(
         db, probe, user_id=user.id, corpus="B", top_k=CORPUS_B_TOP_K
     )
+    # Corpus C — live market news. Always retrieved; the relevance floor
+    # naturally suppresses irrelevant articles. A separate call (not "all")
+    # so news cannot crowd out A or B chunks in the top-K.
+    corpus_c = retrieval.retrieve(
+        db, probe, user_id=user.id, corpus="C", top_k=CORPUS_C_TOP_K
+    )
 
     symbols = find_symbols(db, probe) if _PRICE_CUES.search(probe) else []
     market_text, market_citations = _market_context(symbols) if symbols else ("", [])
 
-    top_score = max(corpus_a.top_score, corpus_b.top_score)
-    grounded = bool(corpus_a.chunks or corpus_b.chunks)
+    top_score = max(corpus_a.top_score, corpus_b.top_score, corpus_c.top_score)
+    grounded = bool(corpus_a.chunks or corpus_b.chunks or corpus_c.chunks)
 
     # R7.5 — nothing above the floor. Say so, list what exists, make no model call.
     # Live market data on its own counts as grounding, so a bare price question
@@ -368,12 +384,18 @@ def _ask(db: Session, user: User, question: str, *, session_id: str | None) -> d
             "top_score": round(top_score, 4),
         }
 
-    citations = corpus_a.citations() + corpus_b.citations() + market_citations
+    citations = (
+        corpus_a.citations()
+        + corpus_b.citations()
+        + corpus_c.citations()
+        + market_citations
+    )
     history = _history(db, session)
 
     # R7.9 — retrieval worked but no model. The sources are the answer.
     if not llm_gateway.is_available():
-        answer = _reading_list(corpus_a if corpus_a.chunks else corpus_b, language)
+        best_offline = corpus_a if corpus_a.chunks else (corpus_b if corpus_b.chunks else corpus_c)
+        answer = _reading_list(best_offline, language)
         if market_text:
             answer += f"\n\nLive data:\n{market_text}"
         reply = _persist(db, session, question, answer, citations, "offline")
@@ -405,6 +427,13 @@ def _ask(db: Session, user: User, question: str, *, session_id: str | None) -> d
             corpus_b.as_evidence() or "(nothing retrieved about this learner)",
         )
     )
+    if corpus_c.chunks:
+        sections.append(
+            PromptSection(
+                "Recent India market news (Corpus C — contextual only)",
+                corpus_c.as_evidence(),
+            )
+        )
     if market_text:
         sections.append(PromptSection("Live market data", market_text))
     # The question goes in as untrusted: it is free text a learner typed, so it
