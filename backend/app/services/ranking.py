@@ -98,6 +98,31 @@ def _sparse_cosine(a: dict[str, float], b: dict[str, float]) -> float:
     return sum(weight * b.get(term, 0.0) for term, weight in a.items())
 
 
+# Per-chunk token counts, cached so the regex + stopword work happens once per
+# chunk instead of once per query. Keyed on (chunk_key, hash of ranked text) so
+# an edited chunk gets a fresh entry automatically.
+_DOC_CACHE: dict[tuple, tuple[Counter, int]] = {}
+_DOC_CACHE_MAX = 50_000
+
+
+def _doc_counts(chunk: object) -> tuple[Counter, int]:
+    """Return (term counts, max term count) for a chunk, cached."""
+    text = document_text(chunk)
+    key = (getattr(chunk, "chunk_key", None), hash(text))
+    hit = _DOC_CACHE.get(key)
+    if hit is None:
+        counts = Counter(tokenise(text))
+        hit = (counts, max(counts.values()) if counts else 0)
+        if len(_DOC_CACHE) >= _DOC_CACHE_MAX:
+            _DOC_CACHE.clear()
+        _DOC_CACHE[key] = hit
+    return hit
+
+
+def reset_doc_cache() -> None:
+    _DOC_CACHE.clear()
+
+
 class LexicalRanker:
     """TF-IDF cosine ranking. No network, no model, no heavy dependency.
 
@@ -105,6 +130,10 @@ class LexicalRanker:
     trade-off here: candidate sets are small (a few thousand at most), and
     computing IDF per call means a freshly indexed chunk is immediately
     rankable without a separate rebuild step.
+
+    Per-chunk token counts are cached (see _doc_counts), and chunks sharing no
+    term with the query are skipped: their cosine is exactly 0.0 either way.
+    Scores are identical to the uncached implementation.
     """
 
     name = "lexical"
@@ -113,12 +142,12 @@ class LexicalRanker:
         if not candidates:
             return []
 
-        docs = [tokenise(document_text(c)) for c in candidates]
+        docs = [_doc_counts(c) for c in candidates]
         n = len(docs)
 
         doc_freq: Counter[str] = Counter()
-        for tokens in docs:
-            doc_freq.update(set(tokens))
+        for counts, _ in docs:
+            doc_freq.update(counts.keys())
 
         # Smoothed IDF with a floor of 1.0 rather than 0.
         #
@@ -139,10 +168,20 @@ class LexicalRanker:
         idf = {t: math.log((n + 1) / (df + 1)) + 1.0 for t, df in doc_freq.items()}
 
         q_vec = _tf_idf_vector(tokenise(query), idf)
-        out = [
-            Scored(chunk=c, score=_sparse_cosine(q_vec, _tf_idf_vector(tokens, idf)))
-            for c, tokens in zip(candidates, docs)
-        ]
+        q_items = list(q_vec.items())
+
+        out: list[Scored] = []
+        for c, (counts, longest) in zip(candidates, docs):
+            score = 0.0
+            # Only chunks containing at least one query term can score > 0.
+            if q_items and longest > 0 and any(t in counts for t, _ in q_items):
+                weights = {
+                    t: (0.5 + 0.5 * (k / longest)) * idf[t] for t, k in counts.items()
+                }
+                norm = math.sqrt(sum(w * w for w in weights.values()))
+                if norm:
+                    score = sum(qw * weights.get(t, 0.0) for t, qw in q_items) / norm
+            out.append(Scored(chunk=c, score=score))
         out.sort(key=lambda s: s.score, reverse=True)
         return out
 

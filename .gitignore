@@ -45,3 +45,5 @@ backend/data/*.sqlite
 backend/data/*.sqlite3
 backend/logs/
 *.log
+# Local Firebase credentials
+/backend/firebase-adminsdk.json
