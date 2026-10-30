@@ -1,3 +1,4 @@
+
 # Python
 __pycache__/
 *.py[cod]
@@ -27,6 +28,8 @@ build/
 .env.*.local
 *.key
 *.pem
+credentials.json
+service-account*.json
 serviceAccountKey.json
 firebase-adminsdk-*.json
 
@@ -38,17 +41,17 @@ firebase-adminsdk-*.json
 Thumbs.db
 
 # Project-specific
-backend/data/*.db
+*.db
 backend/data/*.sqlite
 backend/data/*.sqlite3
 backend/logs/
 *.log
 
-# Market Movement Predictor — model artifacts (regenerate with training script)
-# These are intentionally excluded: trained models can be large and are fully
-# reproducible from the training script + live market data.
+# Market Movement Predictor — model artifacts
+# Regenerate using the training script
 backend/data/models/
 *.joblib
-# Training datasets (downloaded OHLCV CSVs, if any)
+
+# Training datasets
 backend/data/*.csv
 backend/data/*.parquet
