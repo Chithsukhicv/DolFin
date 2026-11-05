@@ -5,6 +5,7 @@ import NavBar from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
 import { ScenarioBanner } from "@/components/ScenarioBanner";
 import { AuthGuard } from "@/components/AuthGuard";
+import GlobalChatWidget from "@/components/GlobalChatWidget";
 
 /**
  * Three faces, each doing a specific job.
@@ -107,6 +108,7 @@ export default function RootLayout({
           <AuthGuard />
           <NavBar />
           <ScenarioBanner />
+          <GlobalChatWidget />
           <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
             {children}
           </main>
