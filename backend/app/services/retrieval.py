@@ -36,7 +36,9 @@ MAX_TOP_K = 12
 # normalise into [0, 1] so one floor serves both.
 RELEVANCE_FLOOR = 0.05
 
-CorpusSelector = Literal["A", "B", "both"]
+CorpusSelector = Literal["A", "B", "C", "both", "all"]
+# "both" = A + B (original behaviour, preserved for compatibility)
+# "all"  = A + B + C (includes live news)
 
 # Short-lived cache so repeated identical retrievals on one page load do not
 # re-rank. Keyed on query + user + corpus.
@@ -101,6 +103,9 @@ def _scope_candidates(
 
     This is the enforcement point. A Corpus B chunk can only enter the candidate
     set if its owner matches the requesting learner.
+
+    Corpus C is live news — shared across all learners (owner_user_id=None),
+    so it has the same access pattern as Corpus A: no per-user filter needed.
     """
     query = db.query(KnowledgeChunk)
 
@@ -113,7 +118,11 @@ def _scope_candidates(
             KnowledgeChunk.corpus == "B",
             KnowledgeChunk.owner_user_id == user_id,
         )
-    else:  # both
+    elif corpus == "C":
+        # Live news — shared, no owner filter.
+        query = query.filter(KnowledgeChunk.corpus == "C")
+    elif corpus == "both":
+        # Original behaviour: A + B (no news).
         if user_id:
             query = query.filter(
                 or_(
@@ -124,8 +133,27 @@ def _scope_candidates(
             )
         else:
             query = query.filter(KnowledgeChunk.corpus == "A")
+    else:  # "all" — A + B + C
+        if user_id:
+            query = query.filter(
+                or_(
+                    KnowledgeChunk.corpus == "A",
+                    KnowledgeChunk.corpus == "C",
+                    (KnowledgeChunk.corpus == "B")
+                    & (KnowledgeChunk.owner_user_id == user_id),
+                )
+            )
+        else:
+            # No user_id: A and C only (skip B entirely).
+            query = query.filter(
+                or_(
+                    KnowledgeChunk.corpus == "A",
+                    KnowledgeChunk.corpus == "C",
+                )
+            )
 
     return query.all()
+
 
 
 def retrieve(
@@ -159,6 +187,7 @@ def retrieve(
                 chunk.chunk_key, chunk.owner_user_id, user_id,
             )
             continue
+        # Corpus A and C are shared (owner_user_id=None); always safe.
         safe.append(chunk)
 
     if not safe:

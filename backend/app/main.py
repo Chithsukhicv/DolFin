@@ -61,7 +61,40 @@ async def lifespan(app: FastAPI):
             # A retrieval index that failed to build must not stop the app; every
             # AI feature degrades to its deterministic fallback.
             log.warning("Corpus A indexing failed on startup: %s", e)
+
+    # Corpus C — live news background scheduler.
+    # Runs an initial fetch immediately after startup (in a thread so it does
+    # not block the server from accepting requests), then repeats every
+    # news_fetch_interval_hours. Any failure is logged but never crashes the app.
+    import threading
+
+    settings = get_settings()
+    interval_seconds = settings.news_fetch_interval_hours * 3600
+
+    def _news_refresh_loop() -> None:
+        import time as _time
+        log.info(
+            "Corpus C scheduler started (interval=%dh).",
+            settings.news_fetch_interval_hours,
+        )
+        while True:
+            try:
+                with SessionLocal() as db:
+                    result = indexer.reindex_corpus_c(db, embed=False)
+                    log.info("Corpus C scheduled refresh: %s", result)
+            except Exception as e:
+                log.warning("Corpus C refresh error (will retry next cycle): %s", e)
+            _time.sleep(interval_seconds)
+
+    news_thread = threading.Thread(
+        target=_news_refresh_loop,
+        name="corpus-c-scheduler",
+        daemon=True,   # dies when the main process exits — no zombie threads
+    )
+    news_thread.start()
+
     yield
+
 
 
 def create_app() -> FastAPI:
