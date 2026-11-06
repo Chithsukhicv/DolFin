@@ -27,6 +27,8 @@ build/
 .env.*.local
 *.key
 *.pem
+credentials.json
+service-account*.json
 serviceAccountKey.json
 firebase-adminsdk-*.json
 
@@ -38,10 +40,14 @@ firebase-adminsdk-*.json
 Thumbs.db
 
 # Project-specific
-backend/data/*.db
+*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+backend/logs/
+# Project-specific
+*.db
 backend/data/*.sqlite
 backend/data/*.sqlite3
 backend/logs/
 *.log
-
 /backend/firebase-adminsdk.json

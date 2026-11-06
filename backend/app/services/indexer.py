@@ -527,17 +527,68 @@ def delete_corpus_b(db: Session, user_id: str) -> int:
     return len(rows)
 
 
+def reindex_corpus_c(db: Session, *, embed: bool = True) -> dict:
+    """Fetch live market news and sync it into Corpus C.
+
+    Corpus C is live India-focused financial news. It is shared across all
+    learners (owner_user_id=None, like Corpus A) and is refreshed every
+    news_fetch_interval_hours hours from the background scheduler.
+
+    Sources (in priority order):
+      1. GNews API  — structured JSON, high quality (requires gnews_api_key)
+      2. Google News RSS  — fallback, no key required
+
+    Freshness is enforced at ingestion: only articles published within
+    MAX_ARTICLE_AGE_HOURS (48h) are indexed. _sync() removes chunks that
+    disappear from the desired set, so stale articles are pruned automatically
+    on each refresh run.
+
+    If both sources fail, this function logs a warning and returns without
+    modifying the existing index — degrading gracefully rather than wiping
+    Corpus C on a transient network error.
+    """
+    from app.config import get_settings
+    from app.services.news_fetcher import build_corpus_c_chunks, fetch_news
+
+    settings = get_settings()
+    articles = fetch_news(settings.gnews_api_key)
+
+    if not articles:
+        log.warning(
+            "Corpus C: both news sources failed or returned nothing. "
+            "Existing index preserved."
+        )
+        return {
+            "corpus": "C",
+            "inserted": 0,
+            "updated": 0,
+            "deleted": 0,
+            "embedded": 0,
+            "total": 0,
+            "status": "no_articles",
+        }
+
+    chunks = build_corpus_c_chunks(articles)
+    result = _sync(db, chunks, corpus="C", owner_user_id=None, embed=embed)
+    result["status"] = "ok"
+    log.info("Corpus C reindexed: %s", result)
+    return result
+
+
 def corpus_stats(db: Session) -> dict:
     """Counts for the health endpoint and for verifying an index run."""
     total = db.query(KnowledgeChunk).count()
     corpus_a = db.query(KnowledgeChunk).filter(KnowledgeChunk.corpus == "A").count()
+    corpus_b = db.query(KnowledgeChunk).filter(KnowledgeChunk.corpus == "B").count()
+    corpus_c = db.query(KnowledgeChunk).filter(KnowledgeChunk.corpus == "C").count()
     embedded = (
         db.query(KnowledgeChunk).filter(KnowledgeChunk.embedding.isnot(None)).count()
     )
     return {
         "total_chunks": total,
         "corpus_a": corpus_a,
-        "corpus_b": total - corpus_a,
+        "corpus_b": corpus_b,
+        "corpus_c": corpus_c,
         "embedded": embedded,
         "ranking": "embedding" if embedded else "lexical",
     }
