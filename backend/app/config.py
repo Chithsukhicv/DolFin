@@ -1,9 +1,10 @@
 """Application configuration loaded from environment variables."""
 
+import math
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,17 +64,6 @@ class Settings(BaseSettings):
     llm_timeout_interactive_seconds: float = 20.0
     llm_timeout_deferred_seconds: float = 45.0
 
-    @field_validator("llm_requests_per_minute")
-    @classmethod
-    def _budget_range(cls, v: int) -> int:
-        # Fail loudly at startup rather than behaving oddly at request time.
-        if not 1 <= v <= 1000:
-            raise ValueError(
-                "llm_requests_per_minute must be between 1 and 1000 "
-                f"(got {v}). Set LLM_REQUESTS_PER_MINUTE in .env."
-            )
-        return v
-
     # Portfolio
     starting_cash: float = 100_000.0
 
@@ -81,9 +71,60 @@ class Settings(BaseSettings):
     price_db_path: str = "./data/prices.db"
     price_refresh_interval_minutes: int = 15
 
+    # Readiness Score V2 weights. These must sum to 1.0.
+    readiness_weight_diversification: float = 0.25
+    readiness_weight_discipline: float = 0.25
+    readiness_weight_goal_alignment: float = 0.15
+    readiness_weight_autonomy: float = 0.10
+    readiness_weight_consistency: float = 0.15
+    readiness_weight_engagement: float = 0.10
+    readiness_ml_blend_weight: float = 0.50
+    readiness_ml_blend_dimensions: str = "discipline,autonomy"
+
+    # Corpus C — live market news (GNews API)
+    gnews_api_key: str = ""
+    news_fetch_interval_hours: int = 4
+
+    @field_validator("llm_requests_per_minute")
+    @classmethod
+    def _budget_range(cls, value: int) -> int:
+        # Fail loudly at startup rather than behaving oddly at request time.
+        if not 1 <= value <= 1000:
+            raise ValueError(
+                "llm_requests_per_minute must be between 1 and 1000 "
+                f"(got {value}). Set LLM_REQUESTS_PER_MINUTE in .env."
+            )
+        return value
+
+    @field_validator("readiness_ml_blend_weight")
+    @classmethod
+    def _blend_weight_range(cls, value: float) -> float:
+        if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise ValueError("readiness_ml_blend_weight must be between 0 and 1")
+        return value
+
+    @model_validator(mode="after")
+    def _readiness_weights_sum_to_one(self) -> "Settings":
+        weights = (
+            self.readiness_weight_diversification,
+            self.readiness_weight_discipline,
+            self.readiness_weight_goal_alignment,
+            self.readiness_weight_autonomy,
+            self.readiness_weight_consistency,
+            self.readiness_weight_engagement,
+        )
+        if (
+            any(not math.isfinite(weight) or weight < 0 for weight in weights)
+            or not math.isclose(sum(weights), 1.0, abs_tol=1e-8)
+        ):
+            raise ValueError(
+                "Readiness weights must be finite, non-negative, and sum to 1.0"
+            )
+        return self
+
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def project_root(self) -> Path:
