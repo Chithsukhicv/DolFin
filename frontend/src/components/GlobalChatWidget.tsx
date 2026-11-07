@@ -151,7 +151,7 @@ export default function GlobalChatWidget() {
             {turns.length === 0 && (
               <div className="space-y-3">
                 <p className="text-sm text-slate-300">
-                  Hi! I'm DolFin. Ask me anything about investing,
+                  Hi! I&apos;m DolFin. Ask me anything about investing,
                   your portfolio, or your learning journey.
                 </p>
 
