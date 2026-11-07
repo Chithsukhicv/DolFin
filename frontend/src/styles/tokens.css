@@ -1,0 +1,29 @@
+/* ---------------------------------------------------------------------------
+   DolFin — Premium UI Design Tokens
+   ---------------------------------------------------------------------------
+   Additional tokens for the premium UI layer. These complement the existing
+   tokens in globals.css without replacing them. Import this file from globals.css.
+--------------------------------------------------------------------------- */
+
+:root {
+  /* Primary backgrounds */
+  --bg-primary: #080B12;
+  --bg-secondary: #0D1220;
+
+  /* Accent colours */
+  --accent-indigo: #6C63FF;
+  --accent-cyan: #40D9FF;
+
+  /* Semantic colours */
+  --positive: #00D6A0;
+  --negative: #FF6B6B;
+
+  /* Text */
+  --text-primary: #F5F7FF;
+  --text-secondary: #9BA7BC;
+
+  /* Glass surface */
+  --glass-bg: rgba(13, 18, 32, 0.7);
+  --glass-border: rgba(108, 99, 255, 0.2);
+  --shadow-glow: 0 0 30px rgba(108, 99, 255, 0.08);
+}

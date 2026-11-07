@@ -135,9 +135,10 @@ export default function AskPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Ask DolFin</h1>
-        <p className="text-sm text-slate-500">
-          Answers come from DolFin&apos;s own material and your own record — and every
+        <p className="label mb-1" style={{ color: "#A855F7" }}>AI</p>
+        <h1 className="font-display text-2xl font-bold text-white">Ask DolFin</h1>
+        <p className="mt-1 text-sm text-muted">
+          Answers come from DolFin&apos;s own material and your own record — every
           answer shows you what it was built from.
         </p>
       </header>
