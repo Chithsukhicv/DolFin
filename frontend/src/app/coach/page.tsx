@@ -31,9 +31,10 @@ export default function CoachPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Coach history</h1>
-        <p className="text-sm text-slate-500">
+      <header className="animate-rise">
+        <p className="label mb-1" style={{ color: "#A855F7" }}>Behaviour</p>
+        <h1 className="font-display text-2xl font-bold text-white">Coach History</h1>
+        <p className="mt-1 text-sm text-muted">
           Every warning the coach fired and what you did with it.
         </p>
       </header>

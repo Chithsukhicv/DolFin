@@ -28,7 +28,7 @@ export function RetestPanel({ userId }: { userId: string }) {
   if (concepts.length === 0) return null;
 
   return (
-    <Card className="border-amber-200 bg-amber-50/50">
+    <Card className="border-warn/25 bg-warn/6">
       <CardHeader
         title="Worth re-testing"
         subtitle="You've attempted these and not passed yet — these links give you new questions, not the same ones"
@@ -38,13 +38,13 @@ export function RetestPanel({ userId }: { userId: string }) {
           <Link
             key={concept}
             href={`/coach/quiz/${concept}`}
-            className="rounded-full bg-white px-3 py-1.5 text-sm capitalize text-slate-700 ring-1 ring-amber-200 hover:bg-amber-100"
+            className="rounded-full border border-warn/30 bg-warn/10 px-3 py-1.5 text-sm capitalize text-warn transition hover:bg-warn/20"
           >
             {concept.replaceAll("_", " ")} →
           </Link>
         ))}
       </div>
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-subtle">
         Passing any one of these raises your Discipline sub-score. Each distinct
         concept counts once, so there&apos;s nothing to gain from repeating one you
         already passed.

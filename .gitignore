@@ -44,4 +44,10 @@ Thumbs.db
 backend/data/*.sqlite
 backend/data/*.sqlite3
 backend/logs/
+# Project-specific
+*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+backend/logs/
 *.log
+/backend/firebase-adminsdk.json

@@ -64,10 +64,10 @@ export function PriceChart({ symbol }: { symbol: string }) {
               key={r.label}
               onClick={() => setRange(r)}
               aria-pressed={range.label === r.label}
-              className={`rounded px-2 py-1 text-xs font-medium transition ${
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                 range.label === r.label
-                  ? "bg-indigo-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  ? "bg-brand/15 text-brand border border-brand/30"
+                  : "bg-elev-2 text-muted border border-hairline hover:bg-elev-3 hover:text-fg"
               }`}
             >
               {r.label}
@@ -75,7 +75,7 @@ export function PriceChart({ symbol }: { symbol: string }) {
           ))}
         </div>
         {bars.length > 1 && (
-          <span className={`text-xs font-medium ${up ? "text-emerald-600" : "text-red-600"}`}>
+          <span className={`text-xs font-medium ${up ? "text-pos" : "text-neg"}`}>
             {up ? "+" : ""}
             {changePct.toFixed(1)}% over {range.label}
           </span>
@@ -84,30 +84,44 @@ export function PriceChart({ symbol }: { symbol: string }) {
 
       <div className="h-40 w-full">
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">
+          <div className="flex h-full items-center justify-center text-xs text-subtle">
             Loading price history…
           </div>
         ) : error || bars.length < 2 ? (
-          <div className="flex h-full items-center justify-center px-4 text-center text-xs text-slate-400">
+          <div className="flex h-full items-center justify-center px-4 text-center text-xs text-subtle">
             Price history isn&apos;t available for this symbol right now.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={bars} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+              <defs>
+                <linearGradient id="priceGradUp" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00D6A0" stopOpacity={0.15} />
+                  <stop offset="100%" stopColor="#00D6A0" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="priceGradDown" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FF6B6B" stopOpacity={0.15} />
+                  <stop offset="100%" stopColor="#FF6B6B" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                tick={{ fontSize: 10, fill: "#949aa6" }}
                 tickFormatter={(d: string) =>
                   new Date(d).toLocaleDateString("en-IN", { month: "short", year: "2-digit" })
                 }
                 minTickGap={40}
+                axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                tickLine={false}
               />
               <YAxis
                 domain={["auto", "auto"]}
-                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                tick={{ fontSize: 10, fill: "#949aa6" }}
                 tickFormatter={(v) => String(Math.round(Number(v)))}
                 width={44}
+                axisLine={false}
+                tickLine={false}
               />
               <Tooltip
                 formatter={(v) => [rupees(Number(v ?? 0)), "Close"]}
@@ -118,12 +132,18 @@ export function PriceChart({ symbol }: { symbol: string }) {
                     year: "numeric",
                   })
                 }
-                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 10,
+                  background: "var(--elev-3)",
+                  border: "1px solid var(--hairline-strong)",
+                  color: "var(--fg)",
+                }}
               />
               <Line
                 type="monotone"
                 dataKey="close"
-                stroke={up ? "#059669" : "#dc2626"}
+                stroke={up ? "#00D6A0" : "#FF6B6B"}
                 strokeWidth={1.75}
                 dot={false}
               />
@@ -133,7 +153,7 @@ export function PriceChart({ symbol }: { symbol: string }) {
       </div>
 
       {bars.length > 1 && maxDrawdown < -0.02 && (
-        <p className="mt-1.5 text-xs text-slate-500">
+        <p className="mt-1.5 text-xs text-subtle">
           Biggest fall in this period: {(maxDrawdown * 100).toFixed(1)}%. Swings like this are
           normal — it&apos;s the selling during them that costs people money.
         </p>
