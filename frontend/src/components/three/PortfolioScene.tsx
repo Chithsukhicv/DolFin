@@ -130,18 +130,6 @@ function ExtrudedSlice({
   );
 }
 
-function AutoRotate({ reducedMotion }: { reducedMotion: boolean }) {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (reducedMotion || !groupRef.current) return;
-    // Slow auto-rotate when nothing hovered
-    groupRef.current.rotation.y += 0.003;
-  });
-
-  return <group ref={groupRef} />;
-}
-
 export function PortfolioScene({ sectors }: { sectors: Sector[] }) {
   const [hovered, setHovered] = useState<string | null>(null);
   // FIX: useSyncExternalStore-based hook — no setState inside useEffect

@@ -29,8 +29,7 @@ export function FinancialSphere({ className }: { className?: string }) {
     if (typeof window === "undefined") return;
     const el = mountRef.current;
     if (!el) return;
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const container: HTMLDivElement = el!;
+    const container: HTMLDivElement = el;
 
     let THREE: typeof import("three");
     let renderer: import("three").WebGLRenderer;

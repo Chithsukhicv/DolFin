@@ -6,11 +6,6 @@ import { fetcher, type ConceptSummary, type GlossaryTerm } from "@/lib/api";
 import { Card, CardHeader } from "@/components/Card";
 import { ErrorState, LoadingCard } from "@/components/States";
 
-const DIFFICULTY_STYLES: Record<string, string> = {
-  beginner: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/25",
-  intermediate: "bg-amber-500/15 text-amber-300 ring-amber-500/25",
-};
-
 export default function LearnIndexPage() {
   const { data: concepts, error, isLoading } = useSWR<ConceptSummary[]>(
     "/learn/concepts",
