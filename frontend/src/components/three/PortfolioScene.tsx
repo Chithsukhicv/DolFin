@@ -4,6 +4,7 @@ import { useRef, useState, useMemo, useEffect } from "react";
 import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 interface Sector {
   name: string;
@@ -141,35 +142,27 @@ function AutoRotate({ reducedMotion }: { reducedMotion: boolean }) {
   return <group ref={groupRef} />;
 }
 
-export function PortfolioScene({
-  sectors,
-}: {
-  sectors: Sector[];
-}) {
+export function PortfolioScene({ sectors }: { sectors: Sector[] }) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
+  // FIX: useSyncExternalStore-based hook — no setState inside useEffect
+  const reducedMotion = usePrefersReducedMotion();
 
   const total = sectors.reduce((s, x) => s + x.value, 0);
 
-  // Build angle ranges
-  const slices = useMemo(() => {
-    let angle = 0;
-    return sectors.map((s) => {
-      const frac = s.value / (total || 1);
-      const start = angle;
-      const end = angle + frac * Math.PI * 2;
-      angle = end;
-      return { ...s, startAngle: start, endAngle: end, percent: frac * 100 };
-    });
-  }, [sectors, total]);
+  // FIX: derive each startAngle from a prefix sum instead of mutating a
+  // local variable across loop iterations
+  const slices = useMemo(
+    () =>
+      sectors.map((s, index) => {
+        const startAngle = sectors
+          .slice(0, index)
+          .reduce((acc, prev) => acc + (prev.value / (total || 1)) * Math.PI * 2, 0);
+        const frac = s.value / (total || 1);
+        const endAngle = startAngle + frac * Math.PI * 2;
+        return { ...s, startAngle, endAngle, percent: frac * 100 };
+      }),
+    [sectors, total],
+  );
 
   if (sectors.length === 0) {
     return (

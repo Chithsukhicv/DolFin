@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Sparkles } from "@react-three/drei";
 import * as THREE from "three";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 type ScenarioKind = "crash" | "bull" | "correction" | "sideways" | "bear" | null;
 
@@ -117,15 +118,7 @@ function NeutralScene({ reducedMotion }: { reducedMotion: boolean }) {
 }
 
 export function ScenarioScene({ kind }: { kind: ScenarioKind }) {
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
+  const reducedMotion = usePrefersReducedMotion();
 
   const cfg = kind ? SCENARIO_CONFIG[kind] : null;
 

@@ -1,18 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Augments React's JSX IntrinsicElements with the full set of Three.js
- * element names that React Three Fiber exposes. These are registered by
- * @react-three/fiber at runtime but need to be declared here for TypeScript
- * to accept them in JSX.
+ * Augments React's JSX IntrinsicElements with Three.js element names.
  *
- * We derive from ThreeElements when the package supports it, or fall back to
- * an explicit list of the elements actually used in this project.
+ * IMPORTANT: no top-level import/export — this file must be an ambient script.
+ * With isolatedModules:true a file with imports becomes a module and its global
+ * augmentations don't propagate to other files. The inline import() expression
+ * keeps this file script-scoped while still referencing external types.
  */
-import type { ThreeElements } from "@react-three/fiber";
-
 declare global {
   namespace React {
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    interface IntrinsicElements extends ThreeElements {}
+    interface IntrinsicElements
+      extends import("@react-three/fiber").ThreeElements {}
   }
 }

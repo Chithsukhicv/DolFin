@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 
 const Canvas = dynamic(
@@ -8,9 +8,10 @@ const Canvas = dynamic(
   { ssr: false }
 );
 
-// Detect WebGL support
+// FIX: WebGL availability and mount state are read via useSyncExternalStore
+// instead of setState inside useEffect, which triggered react-hooks/no-direct-
+// set-state-in-use-effect in CI lint.
 function hasWebGL(): boolean {
-  if (typeof window === "undefined") return false;
   try {
     const canvas = document.createElement("canvas");
     return !!(
@@ -20,6 +21,14 @@ function hasWebGL(): boolean {
   } catch {
     return false;
   }
+}
+
+function noopSubscribe() {
+  return () => {};
+}
+
+function useClientValue<T>(clientFn: () => T, serverValue: T): T {
+  return useSyncExternalStore(noopSubscribe, clientFn, () => serverValue);
 }
 
 interface WebGLCanvasProps {
@@ -37,13 +46,8 @@ export function WebGLCanvas({
   camera = { position: [0, 0, 5], fov: 60 },
   fallback,
 }: WebGLCanvasProps) {
-  const [webglAvailable, setWebglAvailable] = useState(true);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    setWebglAvailable(hasWebGL());
-  }, []);
+  const mounted = useClientValue(() => true, false);
+  const webglAvailable = useClientValue(hasWebGL, true);
 
   if (!mounted) return null;
 

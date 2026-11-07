@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 function ScoreRing({
   radius,
@@ -95,15 +96,7 @@ function OrbitingCube({
 }
 
 export function DashboardScene({ score = 0 }: { score: number }) {
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
+  const reducedMotion = usePrefersReducedMotion();
 
   const clampedScore = Math.max(0, Math.min(100, score));
   const ringColor =

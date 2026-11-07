@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Sparkles } from "@react-three/drei";
 import * as THREE from "three";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 function CoreSphere({
   isThinking,
@@ -82,15 +83,7 @@ function OrbitRing({
 }
 
 export function CoachOrbScene({ isThinking = false }: { isThinking?: boolean }) {
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
+  const reducedMotion = usePrefersReducedMotion();
 
   return (
     <>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { Environment, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 
 function TorusKnotMain({ reducedMotion }: { reducedMotion: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -27,17 +28,20 @@ function TorusKnotMain({ reducedMotion }: { reducedMotion: boolean }) {
   );
 }
 
+// FIX: wireframe is now a stable prop — no Math.random() during render
 function FloatingOrb({
   position,
   size,
   color,
   speed,
+  wireframe,
   reducedMotion,
 }: {
   position: [number, number, number];
   size: number;
   color: string;
   speed: number;
+  wireframe: boolean;
   reducedMotion: boolean;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -47,7 +51,8 @@ function FloatingOrb({
     if (reducedMotion || !meshRef.current) return;
     meshRef.current.rotation.x += 0.005 * speed;
     meshRef.current.rotation.y += 0.007 * speed;
-    meshRef.current.position.y = startY + Math.sin(clock.elapsedTime * speed * 0.4) * 0.25;
+    meshRef.current.position.y =
+      startY + Math.sin(clock.elapsedTime * speed * 0.4) * 0.25;
   });
 
   return (
@@ -57,56 +62,58 @@ function FloatingOrb({
         color={color}
         metalness={0.6}
         roughness={0.3}
-        wireframe={Math.random() > 0.5}
+        wireframe={wireframe}
       />
     </mesh>
   );
 }
 
-function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
-  const { camera } = useThree();
+// FIX: rotate a scene group instead of mutating camera.position directly
+function PointerParallax({ reducedMotion }: { reducedMotion: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
   const mouse = useRef({ x: 0, y: 0 });
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    const onMove = (e: MouseEvent) => {
-      mouse.current.x = (e.clientX / window.innerWidth - 0.5) * 2;
-      mouse.current.y = -(e.clientY / window.innerHeight - 0.5) * 2;
-    };
-    window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
-  }, [reducedMotion]);
+  const target = useRef({ x: 0, y: 0 });
+  const attached = useRef(false);
 
   useFrame(() => {
-    if (reducedMotion) return;
-    camera.position.x += (mouse.current.x * 0.8 - camera.position.x) * 0.05;
-    camera.position.y += (mouse.current.y * 0.5 - camera.position.y) * 0.05;
-    camera.lookAt(0, 0, 0);
+    if (!attached.current && !reducedMotion) {
+      attached.current = true;
+      const onMove = (e: MouseEvent) => {
+        mouse.current.x = (e.clientX / window.innerWidth - 0.5) * 0.6;
+        mouse.current.y = -(e.clientY / window.innerHeight - 0.5) * 0.4;
+      };
+      window.addEventListener("mousemove", onMove);
+    }
+    if (reducedMotion || !groupRef.current) return;
+    target.current.x += (mouse.current.x - target.current.x) * 0.05;
+    target.current.y += (mouse.current.y - target.current.y) * 0.05;
+    groupRef.current.rotation.y = target.current.x;
+    groupRef.current.rotation.x = target.current.y;
   });
 
-  return null;
+  return <group ref={groupRef} />;
 }
 
+// FIX: wireframe values are predetermined constants — not Math.random() at render
+const ORB_CONFIGS: {
+  position: [number, number, number];
+  size: number;
+  color: string;
+  speed: number;
+  wireframe: boolean;
+}[] = [
+  { position: [-3.2,  1.8, -2  ], size: 0.22, color: "#40D9FF", speed: 1.2, wireframe: false },
+  { position: [ 3.5, -1.5, -3  ], size: 0.18, color: "#6C63FF", speed: 0.8, wireframe: true  },
+  { position: [-2.8, -2.2, -1.5], size: 0.28, color: "#8B5CF6", speed: 1.5, wireframe: false },
+  { position: [ 2.2,  2.5, -2.5], size: 0.20, color: "#40D9FF", speed: 0.9, wireframe: true  },
+  { position: [ 0.8, -3.0, -1  ], size: 0.15, color: "#6C63FF", speed: 1.8, wireframe: false },
+  { position: [-1.5,  3.2, -3  ], size: 0.25, color: "#00D6A0", speed: 0.7, wireframe: true  },
+  { position: [ 4.0,  0.5, -4  ], size: 0.30, color: "#8B5CF6", speed: 1.1, wireframe: false },
+];
+
 export function HeroScene() {
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  const orbs = [
-    { position: [-3.2, 1.8, -2] as [number, number, number], size: 0.22, color: "#40D9FF", speed: 1.2 },
-    { position: [3.5, -1.5, -3] as [number, number, number], size: 0.18, color: "#6C63FF", speed: 0.8 },
-    { position: [-2.8, -2.2, -1.5] as [number, number, number], size: 0.28, color: "#8B5CF6", speed: 1.5 },
-    { position: [2.2, 2.5, -2.5] as [number, number, number], size: 0.20, color: "#40D9FF", speed: 0.9 },
-    { position: [0.8, -3, -1] as [number, number, number], size: 0.15, color: "#6C63FF", speed: 1.8 },
-    { position: [-1.5, 3.2, -3] as [number, number, number], size: 0.25, color: "#00D6A0", speed: 0.7 },
-    { position: [4, 0.5, -4] as [number, number, number], size: 0.30, color: "#8B5CF6", speed: 1.1 },
-  ];
+  // FIX: useSyncExternalStore-based hook — no setState inside useEffect
+  const reducedMotion = usePrefersReducedMotion();
 
   return (
     <>
@@ -117,7 +124,7 @@ export function HeroScene() {
 
       <TorusKnotMain reducedMotion={reducedMotion} />
 
-      {orbs.map((o, i) => (
+      {ORB_CONFIGS.map((o, i) => (
         <FloatingOrb key={i} {...o} reducedMotion={reducedMotion} />
       ))}
 
@@ -131,7 +138,7 @@ export function HeroScene() {
       />
 
       <Environment preset="night" />
-      <CameraRig reducedMotion={reducedMotion} />
+      <PointerParallax reducedMotion={reducedMotion} />
     </>
   );
 }
