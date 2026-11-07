@@ -261,6 +261,19 @@ def _base_steps(db: Session, user: User) -> list[dict]:
 
     readiness = readiness_service.compute_readiness(db, user)
     graduated = readiness["graduated"]
+    readiness_score = readiness["score"]
+    if readiness_score is None:
+        readiness_rationale = (
+            "Keep building a multi-day practice record before an overall readiness "
+            "score can be assessed."
+        )
+        readiness_current = None
+    else:
+        readiness_rationale = (
+            f"Your score is {readiness_score:.0f}; graduation is at "
+            f"{readiness['graduation_threshold']:.0f}."
+        )
+        readiness_current = int(readiness_score)
 
     return [
         _step(
@@ -364,11 +377,8 @@ def _base_steps(db: Session, user: User) -> list[dict]:
             graduated,
             href="/readiness",
             action="Check your score",
-            rationale=(
-                f"Your score is {readiness['score']:.0f}; graduation is at "
-                f"{readiness['graduation_threshold']:.0f}."
-            ),
-            current=int(readiness["score"]),
+            rationale=readiness_rationale,
+            current=readiness_current,
             target=int(readiness["graduation_threshold"]),
         ),
     ]

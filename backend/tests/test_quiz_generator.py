@@ -302,15 +302,16 @@ class TestScoring:
         assert attempt.concept == "panic_selling"
         assert attempt.passed is True
 
-    def test_a_passed_generated_quiz_reaches_the_readiness_score(self, db, user, corpus):
+    def test_a_passed_generated_quiz_improves_discipline_evidence(self, db, user, corpus):
         from app.services import readiness as readiness_service
 
-        before = readiness_service.compute_readiness(db, user)["score"]
+        before = readiness_service.compute_readiness(db, user)["breakdown"]["discipline"]
+        assert before is None  # no behavioural evidence before a quiz is completed
         quiz = quiz_generator.build_quiz(db, user, "panic_selling")
         answers = [db.get(GeneratedQuestion, qid).answer for qid in quiz["question_ids"]]
         quiz_generator.record(db, user, "panic_selling", quiz["question_ids"], answers)
-        after = readiness_service.compute_readiness(db, user)["score"]
-        assert after > before
+        after = readiness_service.compute_readiness(db, user)["breakdown"]["discipline"]
+        assert after > 0
 
 
 # ---------------------------------------------------------------------------

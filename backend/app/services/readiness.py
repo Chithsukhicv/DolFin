@@ -1,27 +1,20 @@
-"""Investment Readiness Score (0–100).
+"""Readiness Score V2: reproducible scoring with explicit evidence sufficiency.
 
-Sub-scores roll up to a single number that represents how prepared a
-learner is to use real money. The formula is intentionally transparent:
-no black-box ML, no credit-score mystery.
-
-Sub-scores (each 0–100):
-  - diversification : sustained sector & single-stock spread
-  - discipline      : low panic-sell rate, low FOMO-buy rate
-  - goal_alignment  : trades fit the goal horizons the user picked
-  - autonomy        : recent share of trades made WITHOUT a critical/warn
-                      intervention firing
-  - engagement      : volume of activity (sanity floor; no engagement = no score)
-
-Final score = weighted average, then clamped to [0, 100].
+The score remains a deterministic 0–100 weighted estimate. It is withheld until
+the learner has a multi-day simulator record, while dimension evidence and
+practice achievements remain visible during cold start. Statistical anomaly
+findings are advisory and do not provide a numeric readiness estimate.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import (
     Goal,
     Holding,
@@ -31,305 +24,322 @@ from app.models import (
     Transaction,
     User,
 )
-from app.services import portfolio as portfolio_service
-
-# Weights — we can tune these as we get user data.
-WEIGHTS: dict[str, float] = {
-    "diversification": 0.30,
-    "discipline":      0.30,
-    "goal_alignment":  0.15,
-    "autonomy":        0.15,
-    "engagement":      0.10,
-}
+from app.services import behavioral_ml, portfolio as portfolio_service
+from app.services.behavioral_evidence import build_behavioral_evidence
+from app.services.evidence_aggregation import DimensionEstimate, aggregate_dimension, weighted_score
 
 GRADUATION_THRESHOLD = 80.0
-
-# --- Evidence / confidence tuning -----------------------------------------
-# Behavioural sub-scores (discipline, autonomy, goal alignment) describe a
-# *habit*. A single clean trade is not a habit, so we refuse to award full
-# marks until there is a real track record. Without this ramp a user who
-# bought two stocks and sold one scored ~50, which badly overstates
-# readiness for real money.
-FULL_CONFIDENCE_TRADES = 12      # trades needed before behaviour scores max out
-FULL_CONFIDENCE_HOLDINGS = 8     # holdings needed before diversification maxes out
-                                  # raised from 4: 5 same-day buys proved nothing
-BEGINNER_ANCHOR = 8.0            # every thin-evidence score shrinks toward this
-
-# Laplace smoothing for autonomy: pretend we have already seen a few trades
-# at a 50% clean rate, so the first clean trade cannot read as 100%.
+FULL_CONFIDENCE_TRADES = 12
+FULL_CONFIDENCE_HOLDINGS = 8
+FULL_CONFIDENCE_TRADE_DAYS = 5
+MIN_GRADUATION_HISTORY_DAYS = 14
+BEGINNER_ANCHOR = 8.0
 AUTONOMY_PRIOR_TRADES = 6.0
 AUTONOMY_PRIOR_CLEAN_RATE = 0.5
-
-# Credit for demonstrating understanding. Passing a quiz on a concept you were
-# just warned about is the clearest signal that a lesson landed, so it feeds
-# discipline directly. Capped so quizzes supplement good behaviour rather than
-# substitute for it — you cannot grind quizzes to graduation.
 QUIZ_PASS_BONUS = 6.0
 QUIZ_BONUS_CAP = 24.0
 
-# Minimum days a position must be held before it contributes to the
-# diversification score. Buying 5 stocks at 9am and computing "great
-# diversification!" at 9:05am measures intent, not habit.
-MIN_HOLD_DAYS_FOR_DIVERSIFICATION = 1
+
+def readiness_weights() -> dict[str, float]:
+    settings = get_settings()
+    return {
+        "diversification": settings.readiness_weight_diversification,
+        "discipline": settings.readiness_weight_discipline,
+        "goal_alignment": settings.readiness_weight_goal_alignment,
+        "autonomy": settings.readiness_weight_autonomy,
+        "consistency": settings.readiness_weight_consistency,
+        "engagement": settings.readiness_weight_engagement,
+    }
 
 
 def _confidence(observed: float, needed: float) -> float:
-    """Linear 0 → 1 ramp describing how much evidence we have."""
-    if needed <= 0:
-        return 1.0
-    return max(0.0, min(observed / needed, 1.0))
+    return max(0.0, min(observed / needed, 1.0)) if needed > 0 else 1.0
 
 
 def _shrink(score: float, confidence: float, anchor: float = BEGINNER_ANCHOR) -> float:
-    """Pull a sub-score toward the beginner anchor when evidence is thin.
-
-    confidence = 1.0 → score is returned untouched.
-    confidence = 0.0 → score collapses to the anchor.
-    """
     return anchor + (score - anchor) * confidence
 
 
-# ---------------------------------------------------------------------------
-def _diversification_subscore(snapshot: dict, db: "Session | None" = None, user: "User | None" = None) -> float:
+def _diversification_subscore(snapshot: dict, db: Session | None = None, user: User | None = None) -> float | None:
     holdings = snapshot["holdings"]
-    if not holdings:
-        return 0.0
-
     market_value = snapshot["market_value"]
-    if market_value <= 0:
-        return 0.0
-
-    # Penalty 1: max single-stock weight above 20%.
+    if not holdings or market_value <= 0:
+        return None
     max_pos_pct = max(h["market_value"] / market_value for h in holdings)
-    pos_penalty = max(0.0, (max_pos_pct - 0.20)) * 100
-
-    # Penalty 2: max sector weight above 40%.
-    sector_alloc = snapshot.get("sector_allocation_pct", {})
-    max_sector_pct = (max(sector_alloc.values()) / 100.0) if sector_alloc else 0.0
-    sector_penalty = max(0.0, (max_sector_pct - 0.40)) * 80
-
-    # Bonus: number of distinct sectors (capped).
-    sector_count = len(sector_alloc)
-    spread_bonus = min(sector_count * 8, 40)
-
-    score = 60 + spread_bonus - pos_penalty - sector_penalty
-    score = max(0.0, min(score, 100.0))
-
-    # FULL_CONFIDENCE_HOLDINGS raised to 8 (from 4): 5 same-day buys
-    # only achieve confidence 5/8 = 0.625, so the score is substantially
-    # shrunk toward BEGINNER_ANCHOR. A learner needs to build up to 8 holdings
-    # before diversification is considered demonstrated.
-    conf = _confidence(len(holdings), FULL_CONFIDENCE_HOLDINGS)
-    return max(0.0, min(_shrink(score, conf), 100.0))
+    pos_penalty = max(0.0, max_pos_pct - 0.20) * 100
+    sectors = snapshot.get("sector_allocation_pct", {})
+    max_sector_pct = max(sectors.values()) / 100.0 if sectors else 0.0
+    sector_penalty = max(0.0, max_sector_pct - 0.40) * 80
+    score = 60 + min(len(sectors) * 8, 40) - pos_penalty - sector_penalty
+    return max(0.0, min(score, 100.0))
 
 
 def _quiz_bonus(db: Session, user: User) -> float:
-    """Points earned by passing concept quizzes (distinct concepts only).
-
-    Counted per concept rather than per attempt so retaking the same quiz does
-    not farm points.
-    """
-    passed_concepts = (
+    passed = (
         db.query(QuizAttempt.concept)
         .filter(QuizAttempt.user_id == user.id, QuizAttempt.passed.is_(True))
         .distinct()
         .count()
     )
-    return min(passed_concepts * QUIZ_PASS_BONUS, QUIZ_BONUS_CAP)
+    return min(passed * QUIZ_PASS_BONUS, QUIZ_BONUS_CAP)
 
 
-def _discipline_subscore(db: Session, user: User) -> float:
-    # Look at the last 60 days. Count panic-sells and FOMO-buys.
+def _discipline_subscore(db: Session, user: User) -> float | None:
     since = datetime.now(timezone.utc) - timedelta(days=60)
     logs = (
         db.query(InterventionLog)
         .filter(InterventionLog.user_id == user.id, InterventionLog.created_at >= since)
         .all()
     )
-    # No activity yet — don't fabricate a score.
     txn_count = db.query(Transaction).filter_by(user_id=user.id).count()
     quiz_bonus = _quiz_bonus(db, user)
-
     if not logs and txn_count == 0:
-        # Studying before trading still counts for something, so a learner who
-        # explores the concept library first isn't stuck at a flat zero.
-        return min(quiz_bonus, 100.0)
+        return min(quiz_bonus, 100.0) if quiz_bonus else None
 
-    conf = _confidence(txn_count, FULL_CONFIDENCE_TRADES)
-
-    # Only warnings the user *traded through* count against them. A warning that
-    # was heeded is a success, and one left pending (modal dismissed, no trade)
-    # is not evidence either way — penalising those would punish the learner for
-    # reading the advice, which is the opposite of what we want to reinforce.
-    ignored = [l for l in logs if l.user_action == "ignored"]
-    counts = Counter(l.rule_id for l in ignored)
+    ignored = [row for row in logs if row.user_action == "ignored"]
+    counts = Counter(row.rule_id for row in ignored)
     penalty = (
         counts.get("panic_sell", 0) * 20
         + counts.get("fomo", 0) * 10
         + counts.get("short_hold", 0) * 5
     )
-
-    heeded = sum(1 for l in logs if l.user_action == "heeded")
+    heeded = sum(row.user_action == "heeded" for row in logs)
     credit = min(heeded * 5, 30) + quiz_bonus
-
-    # Only the *assumption* of good conduct is ramped by experience. Actual
-    # recorded behaviour, good or bad, counts at full weight immediately.
-    #
-    # The ordering matters. Ramping the whole score meant a panic sell could
-    # raise discipline, because the extra trade lifted the confidence multiplier
-    # faster than the penalty reduced the base. Subtracting penalties after the
-    # ramp keeps a bad trade unambiguously bad.
-    #
-    # Baseline 50 (not 75): "no warnings fired" means "not yet tested" —
-    # there's nothing to give benefit of the doubt for. The score should rise
-    # from a neutral midpoint as warnings are heeded, not fall from an optimistic
-    # 75 as they are ignored.
+    # No warning observed is neutral, not a perfect discipline record.
     baseline = 70.0 if logs else 50.0
-    score = _shrink(baseline, conf) + credit - penalty
+    return max(0.0, min(baseline + credit - penalty, 100.0))
+
+
+def _goal_alignment_subscore(db: Session, user: User, snapshot: dict) -> float | None:
+    goals = db.query(Goal).filter_by(user_id=user.id).all()
+    txns = db.query(Transaction).filter_by(user_id=user.id).count()
+    if not goals or txns == 0:
+        return None
+    avg_horizon = sum(goal.horizon_months for goal in goals) / len(goals)
+    score = 70.0
+    if avg_horizon >= 60 and txns > 30:
+        score -= 25
+    if avg_horizon < 12 and len(snapshot["holdings"]) > 5:
+        score -= 15
+    if 12 <= avg_horizon <= 60:
+        score += 10
     return max(0.0, min(score, 100.0))
 
 
-def _goal_alignment_subscore(db: Session, user: User, snapshot: dict) -> float:
-    goals = db.query(Goal).filter_by(user_id=user.id).all()
-    txn_count = db.query(Transaction).filter_by(user_id=user.id).count()
-
-    # No goal set yet → no signal.
-    if not goals:
-        return 0.0
-    # Goal exists but the user hasn't traded — don't reward picking a template.
-    if txn_count == 0:
-        return 0.0
-
-    # Heuristic: long-horizon goals (≥ 36 months) suggest equity-friendly, low turnover.
-    avg_horizon = sum(g.horizon_months for g in goals) / len(goals)
-    holding_count = len(snapshot["holdings"])
-
-    score = 70.0
-    # Long horizon, few holdings → fine. Long horizon, hyper-trading → red flag.
-    if avg_horizon >= 60 and txn_count > 30:
-        score -= 25
-    if avg_horizon < 12 and holding_count > 5:
-        # Short horizon shouldn't be in lots of equity positions.
-        score -= 15
-    if 12 <= avg_horizon <= 60:
-        score += 10  # balanced horizon
-    score = max(0.0, min(score, 100.0))
-
-    # Alignment is a claim about behaviour over time, so it needs the same
-    # evidence ramp — picking a goal template and trading once proves nothing.
-    conf = _confidence(txn_count, FULL_CONFIDENCE_TRADES)
-    return max(0.0, min(_shrink(score, conf), 100.0))
-
-
-def _autonomy_subscore(db: Session, user: User) -> float:
-    """Fraction of recent trades that did NOT trigger a warn/critical intervention."""
+def _autonomy_subscore(db: Session, user: User) -> float | None:
     since = datetime.now(timezone.utc) - timedelta(days=60)
     txns = (
         db.query(Transaction)
         .filter(Transaction.user_id == user.id, Transaction.created_at >= since)
         .all()
     )
-    # No trades yet — there's nothing autonomous to grade.
     if not txns:
-        return 0.0
-
-    flagged = 0
-    for t in txns:
-        fired = t.interventions_fired or []
-        if any(f.get("severity") in ("warn", "critical") for f in fired):
-            flagged += 1
-
+        return None
+    flagged = sum(
+        any(item.get("severity") in ("warn", "critical") for item in (txn.interventions_fired or []))
+        for txn in txns
+    )
     clean = len(txns) - flagged
+    return (clean + AUTONOMY_PRIOR_TRADES * AUTONOMY_PRIOR_CLEAN_RATE) / (
+        len(txns) + AUTONOMY_PRIOR_TRADES
+    ) * 100.0
 
-    # Laplace-smoothed clean rate. Raw `clean / total` gives a perfect 100
-    # after one unflagged trade; the prior keeps early scores honest and
-    # converges to the true rate as trades accumulate.
-    smoothed = (
-        (clean + AUTONOMY_PRIOR_TRADES * AUTONOMY_PRIOR_CLEAN_RATE)
-        / (len(txns) + AUTONOMY_PRIOR_TRADES)
-        * 100.0
+
+def _consistency_score(evidence: dict) -> float | None:
+    days = evidence["rolling_30_day_practice_days"]
+    if days == 0:
+        return None
+    # A modest target of two meaningful days/week over a 30-day window.
+    return min(days / 8.0 * 100.0, 100.0)
+
+
+def _engagement_score(evidence: dict) -> float | None:
+    days = evidence["practice_day_count"]
+    if days == 0:
+        return None
+    # Engagement counts distinct verified practice dates, never trade volume.
+    return min(days / 10.0 * 100.0, 100.0)
+
+
+def _estimate(score: float | None, *, count: int, confidence: float,
+              sufficient: bool, evidence: tuple[str, ...]) -> DimensionEstimate | None:
+    if score is None:
+        return None
+    return DimensionEstimate(
+        score=max(0.0, min(float(score), 100.0)),
+        evidence_count=max(0, int(count)),
+        confidence=max(0.0, min(float(confidence), 1.0)),
+        sufficient=sufficient,
+        evidence=evidence,
     )
-    conf = _confidence(len(txns), FULL_CONFIDENCE_TRADES)
-    return max(0.0, min(_shrink(smoothed, conf), 100.0))
 
 
-def _engagement_subscore(db: Session, user: User) -> float:
-    holding_count = db.query(Holding).filter_by(user_id=user.id).count()
-    txn_count = db.query(Transaction).filter_by(user_id=user.id).count()
-    if holding_count == 0 and txn_count == 0:
-        return 0.0
-    # Requires genuine engagement to reach 100.
-    # Old: 5 trades (40) + 5 holdings (60) = 100 on day one.
-    # New: needs ~10 trades (50) + 8+ holdings (40) to hit full marks.
-    score = min(txn_count * 5, 50) + min(holding_count * 6, 30) + (
-        # Bonus 20 points for having made trades over more than one day —
-        # consistent usage, not a one-session burst.
-        20 if _has_multi_day_activity(db, user) else 0
-    )
-    return min(score, 100.0)
-
-
-def _has_multi_day_activity(db: Session, user: User) -> bool:
-    """True when the learner has traded on at least two distinct calendar days."""
-    from app.models import Transaction as Txn
-
-    dates = {
-        t.created_at.date()
-        for t in db.query(Txn.created_at).filter_by(user_id=user.id).all()
-        if t.created_at is not None
-    }
-    return len(dates) >= 2
-
-
-# ---------------------------------------------------------------------------
-def compute_readiness(db: Session, user: User) -> dict:
+def compute_readiness(db: Session, user: User) -> dict[str, Any]:
     snapshot = portfolio_service.portfolio_snapshot(db, user)
-    sub = {
+    evidence = build_behavioral_evidence(db, user)
+    trade_count = evidence["trade_count"]
+    trade_days = evidence["trade_day_count"]
+    holdings_count = len(snapshot["holdings"])
+    span_days = evidence["history_span_days"]
+
+    recent_trade_count = evidence["recent_trade_count"]
+    recent_trade_days = evidence["recent_trade_day_count"]
+    trade_conf = _confidence(recent_trade_count, FULL_CONFIDENCE_TRADES)
+    holding_conf = _confidence(holdings_count, FULL_CONFIDENCE_HOLDINGS)
+    day_conf = _confidence(recent_trade_days, FULL_CONFIDENCE_TRADE_DAYS)
+    span_conf = _confidence(
+        evidence["recent_trade_history_span_days"], MIN_GRADUATION_HISTORY_DAYS
+    )
+    confidence = round(min(trade_conf, holding_conf, day_conf, span_conf), 2)
+    enough_history = (
+        recent_trade_count >= FULL_CONFIDENCE_TRADES
+        and recent_trade_days >= FULL_CONFIDENCE_TRADE_DAYS
+        and holdings_count >= FULL_CONFIDENCE_HOLDINGS
+        and evidence["recent_trade_history_span_days"] >= MIN_GRADUATION_HISTORY_DAYS
+    )
+
+    raw_scores = {
         "diversification": _diversification_subscore(snapshot),
-        "discipline":      _discipline_subscore(db, user),
-        "goal_alignment":  _goal_alignment_subscore(db, user, snapshot),
-        "autonomy":        _autonomy_subscore(db, user),
-        "engagement":      _engagement_subscore(db, user),
+        "discipline": _discipline_subscore(db, user),
+        "goal_alignment": _goal_alignment_subscore(db, user, snapshot),
+        "autonomy": _autonomy_subscore(db, user),
+        "consistency": _consistency_score(evidence),
+        "engagement": _engagement_score(evidence),
     }
-    weighted = sum(sub[k] * WEIGHTS[k] for k in sub)
-    score = round(max(0.0, min(weighted, 100.0)), 1)
+    behavior_sufficient = (
+        recent_trade_count >= FULL_CONFIDENCE_TRADES
+        and recent_trade_days >= FULL_CONFIDENCE_TRADE_DAYS
+        and evidence["recent_trade_history_span_days"] >= MIN_GRADUATION_HISTORY_DAYS
+    )
+    consistency_sufficient = (
+        evidence["rolling_30_day_practice_days"] >= 4
+        and span_days >= MIN_GRADUATION_HISTORY_DAYS
+    )
+    settings = get_settings()
+    blend_dimensions = {
+        item.strip() for item in settings.readiness_ml_blend_dimensions.split(",") if item.strip()
+    }
+    dimensions: dict[str, dict] = {}
+    for name, score in raw_scores.items():
+        if name == "diversification":
+            count = holdings_count
+            sufficient = holdings_count >= FULL_CONFIDENCE_HOLDINGS
+            conf = holding_conf
+            facts = ("current_portfolio_allocation", "current_sector_spread")
+        elif name in ("discipline", "goal_alignment", "autonomy"):
+            count = trade_count
+            sufficient = behavior_sufficient and (name != "goal_alignment" or score is not None)
+            conf = min(trade_conf, day_conf, span_conf)
+            facts = {
+                "discipline": ("resolved_rule_outcomes", "distinct_passed_quiz_concepts"),
+                "goal_alignment": ("user_goal_horizons", "trade_history"),
+                "autonomy": ("warn_free_recent_trades", "trade_history"),
+            }[name]
+        else:
+            count = evidence["practice_day_count"]
+            sufficient = consistency_sufficient
+            conf = _confidence(count, 8)
+            facts = ("verified_distinct_utc_practice_dates", "rolling_30_day_window")
 
-    # An "active" user is one who has actually traded. Without that we surface
-    # an empty state on the frontend rather than a misleading number.
-    txn_count = db.query(Transaction).filter_by(user_id=user.id).count()
-    holding_count = len(snapshot["holdings"])
-    is_active = txn_count > 0
+        ml_estimate = None  # The anomaly engine is not a readiness-label model.
+        det_estimate = _estimate(
+            score,
+            count=count,
+            confidence=conf,
+            sufficient=sufficient,
+            evidence=facts,
+        )
+        dimensions[name] = aggregate_dimension(
+            det_estimate,
+            ml_estimate,
+            ml_weight=settings.readiness_ml_blend_weight,
+            blend_enabled=name in blend_dimensions,
+            ml_exclusion_reason="anomaly_output_is_not_a_readiness_estimate",
+        )
 
-    trade_conf = _confidence(txn_count, FULL_CONFIDENCE_TRADES)
-    holding_conf = _confidence(holding_count, FULL_CONFIDENCE_HOLDINGS)
-    confidence = round(min(trade_conf, holding_conf), 2)
+    weights = readiness_weights()
+    calculated_score = weighted_score(dimensions, weights)
+    observed_weight = sum(
+        weights[name] for name, value in dimensions.items() if value["score"] is not None
+    )
+    effective_weights = {
+        name: round(weights[name] / observed_weight, 6)
+        if enough_history and value["score"] is not None and observed_weight else 0.0
+        for name, value in dimensions.items()
+    }
+    assessment_state = "assessable" if enough_history else "insufficient_evidence"
+    score = calculated_score if enough_history else None
+
+    # Graduation requires evidence for each core behavioural dimension as well
+    # as the proposed score threshold. A missing goal is an unobserved signal.
+    graduation_eligible = enough_history and all(
+        dimensions[name]["sufficient"]
+        for name in ("diversification", "discipline", "goal_alignment", "autonomy", "consistency")
+    )
+    if not enough_history:
+        behaviour_state = "insufficient_evidence"
+    elif (
+        dimensions["discipline"]["score"] is not None
+        and dimensions["discipline"]["score"] <= 35
+    ) or (
+        dimensions["autonomy"]["score"] is not None
+        and dimensions["autonomy"]["score"] <= 35
+    ):
+        behaviour_state = "demonstrated_risky_behaviour"
+    else:
+        behaviour_state = "adequate_neutral_or_positive_evidence"
 
     return {
         "score": score,
-        "graduated": is_active and score >= GRADUATION_THRESHOLD,
+        "graduated": bool(graduation_eligible and score is not None and score >= GRADUATION_THRESHOLD),
+        "graduation_eligible": graduation_eligible,
         "graduation_threshold": GRADUATION_THRESHOLD,
-        "breakdown": sub,
-        "weights": WEIGHTS,
-        "is_active": is_active,
-        "transactions_count": txn_count,
-        "holdings_count": holding_count,
-        # < 1.0 means the score is still provisional: not enough history to
-        # judge behaviour. The frontend uses this to label the score.
+        "assessment_state": assessment_state,
+        "behaviour_state": behaviour_state,
+        "breakdown": {name: value["score"] for name, value in dimensions.items()},
+        "dimensions": dimensions,
+        "weights": weights,
+        "effective_weights": effective_weights,
+        "score_version": 2,
+        "is_active": trade_count > 0,
+        "transactions_count": trade_count,
+        "holdings_count": holdings_count,
         "confidence": confidence,
-        "provisional": confidence < 1.0,
+        "provisional": not enough_history,
+        "evidence_sufficient": enough_history,
         "evidence_needed": {
-            "trades": max(0, FULL_CONFIDENCE_TRADES - txn_count),
-            "holdings": max(0, FULL_CONFIDENCE_HOLDINGS - holding_count),
+            "trades": max(0, FULL_CONFIDENCE_TRADES - recent_trade_count),
+            "holdings": max(0, FULL_CONFIDENCE_HOLDINGS - holdings_count),
+            "trade_days": max(0, FULL_CONFIDENCE_TRADE_DAYS - recent_trade_days),
+            "history_days": max(0, MIN_GRADUATION_HISTORY_DAYS - evidence["recent_trade_history_span_days"]),
         },
+        "practice": evidence,
+        "ml_behavioral_analysis": behavioral_ml.analyse_trade_anomalies(evidence),
     }
 
 
-def snapshot_readiness(db: Session, user: User) -> ReadinessSnapshot:
-    result = compute_readiness(db, user)
+def snapshot_readiness(
+    db: Session, user: User, result: dict[str, Any] | None = None
+) -> ReadinessSnapshot | None:
+    result = result or compute_readiness(db, user)
+    if result["score"] is None:
+        return None
     snap = ReadinessSnapshot(
         user_id=user.id,
         score=result["score"],
-        breakdown={"sub": result["breakdown"], "weights": WEIGHTS},
+        breakdown={
+            "version": 2,
+            "sub": result["breakdown"],
+            "weights": result["weights"],
+            "effective_weights": result["effective_weights"],
+            "dimensions": result["dimensions"],
+            "practice": {
+                "current_streak": result["practice"]["current_streak"],
+                "longest_streak": result["practice"]["longest_streak"],
+                "practice_days": result["practice"]["practice_days"],
+            },
+            "assessment_state": result["assessment_state"],
+        },
     )
     db.add(snap)
     db.commit()
