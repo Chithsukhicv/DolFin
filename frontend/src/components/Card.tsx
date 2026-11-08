@@ -1,12 +1,10 @@
 import clsx from "clsx";
-import { ReactNode } from "react";
+import { ReactNode, CSSProperties } from "react";
 
 /**
- * The surface everything sits on.
- *
- * Not hover-lifting by default. Most cards here are panels holding data, and a
- * static panel that lifts under the cursor is claiming to be clickable when it
- * isn't. Pass `interactive` only on the ones that navigate.
+ * Premium dark surface card.
+ * Uses inline styles for the neon border/glow accents
+ * so they work independently of Tailwind's purge pass.
  */
 export function Card({
   children,
@@ -14,23 +12,65 @@ export function Card({
   interactive = false,
   sheen = true,
   as: Tag = "div",
+  accent = "purple",
 }: {
   children: ReactNode;
   className?: string;
   interactive?: boolean;
-  /** Top-edge highlight, like light catching the lip of a physical panel. */
   sheen?: boolean;
   as?: "div" | "section" | "article" | "li";
+  accent?: "purple" | "cyan" | "green";
 }) {
+  const accentMap = {
+    purple: {
+      border: "rgb(168 85 247 / 0.2)",
+      glow: "0 0 24px -8px rgb(168 85 247 / 0.12)",
+      top: "linear-gradient(90deg, transparent, #A855F7, transparent)",
+    },
+    cyan: {
+      border: "rgb(34 211 238 / 0.2)",
+      glow: "0 0 24px -8px rgb(34 211 238 / 0.12)",
+      top: "linear-gradient(90deg, transparent, #22D3EE, transparent)",
+    },
+    green: {
+      border: "rgb(16 217 160 / 0.2)",
+      glow: "0 0 24px -8px rgb(16 217 160 / 0.12)",
+      top: "linear-gradient(90deg, transparent, #10D9A0, transparent)",
+    },
+  }[accent];
+
+  const baseStyle: CSSProperties = {
+    background: "rgb(11 11 27 / 0.85)",
+    border: `1px solid ${accentMap.border}`,
+    boxShadow: accentMap.glow,
+    position: "relative",
+    overflow: "hidden",
+  };
+
   return (
     <Tag
       className={clsx(
-        "card rounded-2xl p-5",
-        sheen && "card-sheen",
-        interactive && "card-interactive cursor-pointer",
+        "rounded-2xl p-5",
+        interactive && "cursor-pointer transition-transform hover:-translate-y-0.5",
         className,
       )}
+      style={baseStyle}
     >
+      {sheen && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "1px",
+            background: accentMap.top,
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {children}
     </Tag>
   );
@@ -51,14 +91,21 @@ export function CardHeader({
     <div className="mb-4 flex items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3">
         {icon && (
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-500/25 bg-indigo-500/10 text-indigo-300">
+          <span
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+            style={{
+              background: "rgb(168 85 247 / 0.1)",
+              border: "1px solid rgb(168 85 247 / 0.2)",
+              color: "#A855F7",
+            }}
+          >
             {icon}
           </span>
         )}
         <div className="min-w-0">
           <h3 className="font-display text-base font-bold text-white">{title}</h3>
           {subtitle && (
-            <p className="mt-0.5 text-xs leading-relaxed text-subtle">{subtitle}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">{subtitle}</p>
           )}
         </div>
       </div>
@@ -67,13 +114,6 @@ export function CardHeader({
   );
 }
 
-/**
- * A single headline number.
- *
- * `metric` gives the mono face and tabular figures, so a value updating from
- * 1,299 to 1,311 does not shift sideways — jitter in a portfolio total reads as
- * instability in exactly the place a nervous beginner needs to feel none.
- */
 export function Stat({
   label,
   value,
@@ -83,15 +123,14 @@ export function Stat({
 }: {
   label: string;
   value: ReactNode;
-  /** Signed change, e.g. "+2.4%". Coloured by `tone`. */
   delta?: string;
   hint?: string;
   tone?: "neutral" | "positive" | "negative";
 }) {
   const deltaTone = {
-    neutral: "text-muted bg-surface-muted border-hairline-strong",
-    positive: "text-emerald-300 bg-emerald-500/10 border-emerald-500/25",
-    negative: "text-rose-300 bg-rose-500/10 border-rose-500/25",
+    neutral: { bg: "rgb(255 255 255 / 0.05)", border: "rgb(255 255 255 / 0.1)", color: "#A1A1B5" },
+    positive: { bg: "rgb(16 217 160 / 0.1)", border: "rgb(16 217 160 / 0.25)", color: "#10D9A0" },
+    negative: { bg: "rgb(242 87 103 / 0.1)", border: "rgb(242 87 103 / 0.25)", color: "#F25767" },
   }[tone];
 
   return (
@@ -101,21 +140,18 @@ export function Stat({
         <span className="metric text-2xl font-bold text-white">{value}</span>
         {delta && (
           <span
-            className={clsx(
-              "rounded-md border px-1.5 py-0.5 font-mono text-xs font-medium",
-              deltaTone,
-            )}
+            className="rounded-md px-1.5 py-0.5 font-mono text-xs font-medium"
+            style={{ background: deltaTone.bg, border: `1px solid ${deltaTone.border}`, color: deltaTone.color }}
           >
             {delta}
           </span>
         )}
       </div>
-      {hint && <p className="mt-1.5 text-xs text-subtle">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
 
-/** Section heading used above a group of cards. */
 export function SectionTitle({
   title,
   subtitle,
@@ -128,9 +164,7 @@ export function SectionTitle({
   return (
     <div className="mb-4 flex items-end justify-between gap-4">
       <div>
-        <h2 className="font-display text-lg font-bold tracking-tight text-white">
-          {title}
-        </h2>
+        <h2 className="font-display text-lg font-bold tracking-tight text-white">{title}</h2>
         {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
       </div>
       {right}

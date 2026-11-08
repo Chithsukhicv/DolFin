@@ -82,13 +82,32 @@ class Settings(BaseSettings):
     readiness_ml_blend_dimensions: str = "discipline,autonomy"
 
     # Corpus C — live market news (GNews API)
+
+    # Corpus C — live market news (GNews API)
+    #
+    # GNews free tier: 100 requests/day.
+    # Set to "" to disable GNews and use Google News RSS.
     gnews_api_key: str = ""
     news_fetch_interval_hours: int = 4
+
+    # Market Movement Predictor
+    market_ml_model_dir: str = "./data/models"
+
+    # Return thresholds
+    market_ml_return_threshold_1d: float = 0.01
+    market_ml_return_threshold_3d: float = 0.015
+    market_ml_return_threshold_5d: float = 0.02
+    market_ml_return_threshold_10d: float = 0.025
+
+    # Model staleness
+    market_ml_staleness_days: int = 7
+
+    # Minimum historical data
+    market_ml_min_history_bars: int = 60
 
     @field_validator("llm_requests_per_minute")
     @classmethod
     def _budget_range(cls, value: int) -> int:
-        # Fail loudly at startup rather than behaving oddly at request time.
         if not 1 <= value <= 1000:
             raise ValueError(
                 "llm_requests_per_minute must be between 1 and 1000 "
@@ -121,6 +140,7 @@ class Settings(BaseSettings):
                 "Readiness weights must be finite, non-negative, and sum to 1.0"
             )
         return self
+
 
     @property
     def cors_origin_list(self) -> list[str]:
