@@ -6,17 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { clearUserId } from "@/lib/session";
 import { useUserId } from "@/lib/useSession";
 
-/**
- * Primary navigation.
- *
- * Ten destinations is too many for one row on a phone, so below `lg` this
- * collapses to a sheet. The previous version wrapped onto three lines on a
- * narrow screen and pushed the actual page content below the fold.
- *
- * "Ask" carries a small AI dot because it behaves differently from every other
- * tab — it is the only one that generates rather than displays.
- */
-
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/learn", label: "Learn" },
@@ -35,8 +24,6 @@ export default function NavBar() {
   const [open, setOpen] = useState(false);
 
   function isActive(href: string) {
-    // Exact match for the root-ish tabs, prefix match for nested routes like
-    // /learn/diversification and /coach/quiz/fomo.
     return pathname === href || pathname?.startsWith(`${href}/`);
   }
 
@@ -47,23 +34,50 @@ export default function NavBar() {
   }
 
   return (
-    <header className="glass sticky top-0 z-40 border-b border-hairline">
+    <header
+      className="glass sticky top-0 z-40"
+      style={{ borderBottom: "1px solid rgb(124 58 237 / 0.2)" }}
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link href="/" className="group flex shrink-0 items-center gap-2">
+        {/* Logo */}
+        <Link href="/" className="group flex shrink-0 items-center gap-2.5">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold text-white"
+            style={{
+              background: "linear-gradient(135deg, #7C3AED, #22D3EE)",
+              boxShadow: "0 0 16px rgb(124 58 237 / 0.5)",
+            }}
+          >
+            D
+          </div>
           <span className="font-display text-xl font-extrabold tracking-tight">
-            <span className="bg-gradient-to-r from-indigo-400 to-cyan-300 bg-clip-text text-transparent">
+            <span
+              style={{
+                background: "linear-gradient(135deg, #A855F7, #22D3EE)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
               Dol
             </span>
             <span className="text-white">Fin</span>
           </span>
-          <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-300 ring-1 ring-inset ring-indigo-500/20">
+          <span
+            className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+            style={{
+              background: "rgb(124 58 237 / 0.15)",
+              border: "1px solid rgb(124 58 237 / 0.3)",
+              color: "#A855F7",
+            }}
+          >
             Practice
           </span>
         </Link>
 
         {hasUser && (
           <>
-            {/* Desktop */}
+            {/* Desktop nav */}
             <nav aria-label="Main" className="hidden items-center gap-0.5 lg:flex">
               {LINKS.map((l) => {
                 const active = isActive(l.href);
@@ -72,18 +86,34 @@ export default function NavBar() {
                     key={l.href}
                     href={l.href}
                     aria-current={active ? "page" : undefined}
-                    className={`relative rounded-lg px-3 py-1.5 text-sm transition ${
+                    className="relative rounded-xl px-3.5 py-1.5 text-sm transition"
+                    style={
                       active
-                        ? "bg-indigo-500/15 font-semibold text-indigo-300"
-                        : "text-muted hover:bg-surface-hover hover:text-white"
-                    }`}
+                        ? {
+                            background: "rgb(124 58 237 / 0.15)",
+                            color: "#A855F7",
+                            fontWeight: 600,
+                            border: "1px solid rgb(168 85 247 / 0.2)",
+                          }
+                        : {
+                            color: "#A1A1B5",
+                            fontWeight: 400,
+                          }
+                    }
                   >
                     {l.label}
                     {l.ai && (
                       <span
                         aria-hidden
-                        title="AI-powered"
-                        className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-500 align-super"
+                        className="ml-1 inline-block h-1.5 w-1.5 rounded-full align-super"
+                        style={{ background: "#A855F7", boxShadow: "0 0 6px #A855F7" }}
+                      />
+                    )}
+                    {active && (
+                      <span
+                        className="absolute bottom-0 inset-x-3 h-px rounded-full"
+                        style={{ background: "linear-gradient(90deg, #7C3AED, #22D3EE)" }}
+                        aria-hidden
                       />
                     )}
                   </Link>
@@ -91,7 +121,8 @@ export default function NavBar() {
               })}
               <button
                 onClick={signOut}
-                className="ml-2 rounded-lg px-3 py-1.5 text-sm text-subtle transition hover:bg-surface-hover hover:text-white"
+                className="ml-2 rounded-xl px-3.5 py-1.5 text-sm transition"
+                style={{ color: "#6b6b85" }}
               >
                 Sign out
               </button>
@@ -103,23 +134,14 @@ export default function NavBar() {
               aria-expanded={open}
               aria-controls="mobile-nav"
               aria-label={open ? "Close menu" : "Open menu"}
-              className="rounded-lg p-2 text-muted transition hover:bg-surface-hover lg:hidden"
+              className="rounded-xl p-2 transition lg:hidden"
+              style={{ color: "#A1A1B5", background: "rgb(124 58 237 / 0.08)" }}
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
                 {open ? (
-                  <path
-                    d="M5 5l10 10M15 5L5 15"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
+                  <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                 ) : (
-                  <path
-                    d="M3 6h14M3 10h14M3 14h14"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
+                  <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                 )}
               </svg>
             </button>
@@ -132,9 +154,10 @@ export default function NavBar() {
         <nav
           id="mobile-nav"
           aria-label="Main"
-          className="animate-rise border-t border-hairline bg-surface px-4 py-3 lg:hidden"
+          className="animate-rise px-4 py-3 lg:hidden"
+          style={{ borderTop: "1px solid rgb(124 58 237 / 0.15)", background: "#0B0B1B" }}
         >
-          <ul className="grid grid-cols-2 gap-1">
+          <ul className="grid grid-cols-2 gap-1.5">
             {LINKS.map((l) => {
               const active = isActive(l.href);
               return (
@@ -143,17 +166,23 @@ export default function NavBar() {
                     href={l.href}
                     onClick={() => setOpen(false)}
                     aria-current={active ? "page" : undefined}
-                    className={`block rounded-lg px-3 py-2 text-sm ${
+                    className="block rounded-xl px-3 py-2.5 text-sm transition"
+                    style={
                       active
-                        ? "bg-indigo-500/15 font-semibold text-indigo-300"
-                        : "text-muted hover:bg-surface-hover"
-                    }`}
+                        ? {
+                            background: "rgb(124 58 237 / 0.15)",
+                            color: "#A855F7",
+                            fontWeight: 600,
+                          }
+                        : { color: "#A1A1B5" }
+                    }
                   >
                     {l.label}
                     {l.ai && (
                       <span
                         aria-hidden
-                        className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-500 align-super"
+                        className="ml-1 inline-block h-1.5 w-1.5 rounded-full align-super"
+                        style={{ background: "#A855F7" }}
                       />
                     )}
                   </Link>
@@ -163,7 +192,8 @@ export default function NavBar() {
           </ul>
           <button
             onClick={signOut}
-            className="mt-2 w-full rounded-lg px-3 py-2 text-left text-sm text-subtle hover:bg-surface-hover"
+            className="mt-2 w-full rounded-xl px-3 py-2 text-left text-sm"
+            style={{ color: "#6b6b85" }}
           >
             Sign out
           </button>
