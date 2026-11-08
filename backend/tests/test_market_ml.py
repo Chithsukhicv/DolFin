@@ -896,8 +896,9 @@ class TestRegressions:
         # Should return a list (possibly empty, possibly with rules) without error.
         assert isinstance(result, list)
 
+
     def test_readiness_score_unchanged(self, db):
-        """compute_readiness returns a valid dict with market_ml imported."""
+        """Market ML import must not break Readiness V2 scoring."""
         from app.services import readiness
         from app.services import market_ml  # noqa: F401
 
@@ -906,8 +907,19 @@ class TestRegressions:
         user = db.query(User).first()
 
         result = readiness.compute_readiness(db, user)
+
         assert "score" in result
-        assert 0.0 <= result["score"] <= 100.0
+        assert result["assessment_state"] in (
+            "assessable",
+            "insufficient_evidence",
+        )
+
+        if result["assessment_state"] == "insufficient_evidence":
+            assert result["score"] is None
+        else:
+            assert result["score"] is not None
+            assert 0.0 <= result["score"] <= 100.0
+
 
     def test_no_intervention_log_on_forecast(self, db, monkeypatch, tmp_path):
         """Calling get_forecast() must not touch InterventionLog at all."""
