@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -121,3 +122,43 @@ class ChatAsk(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     # Omit to start a new conversation.
     session_id: str | None = None
+
+
+# ----- market movement predictor ---------------------------------------------
+
+class HorizonForecast(BaseModel):
+    """Prediction output for a single forecast horizon (1, 3, 5, or 10 days).
+
+    When ``model_status`` is anything other than ``"ok"`` or ``"stale"``, the
+    probability and predicted-class fields are ``None`` — the client must handle
+    this gracefully and never display placeholder values.
+    """
+
+    horizon_days: int
+    predicted_class: Literal["UP", "SIDEWAYS", "DOWN"] | None
+    prob_up: float | None
+    prob_sideways: float | None
+    prob_down: float | None
+    uncertainty_flag: bool
+    # "ok"                  — model loaded, probabilities are current
+    # "stale"               — model loaded but training_date exceeds staleness
+    #                         threshold; probabilities are returned with a warning
+    # "not_trained"         — no .joblib artifact found for this horizon
+    # "insufficient_history"— fewer OHLCV bars than market_ml_min_history_bars
+    model_status: Literal["ok", "not_trained", "stale", "insufficient_history"]
+    model_training_date: date | None  # None when model_status is "not_trained"
+    is_stale: bool = False
+
+
+class MarketForecastResponse(BaseModel):
+    """Full forecast response returned by GET /market-ml/{symbol}/forecast.
+
+    Always contains exactly four ``HorizonForecast`` items — one per horizon
+    (1, 3, 5, 10 days). The ``disclaimer`` field is mandatory and must be
+    surfaced to the learner on every render; it is not optional copy.
+    """
+
+    symbol: str
+    horizons: list[HorizonForecast]  # always 4 items, ordered 1d → 3d → 5d → 10d
+    disclaimer: str = "Experimental educational feature. Not financial advice."
+    fetched_at: int  # Unix epoch seconds

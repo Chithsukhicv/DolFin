@@ -80,6 +80,27 @@ def learner(client):
 
 
 class TestHeedingAWarningIsRewarded:
+    def test_readiness_api_marks_new_learner_unassessable(self, client, learner):
+        uid = learner["id"]
+        result = client.get(f"/readiness/{uid}").json()
+
+        assert result["score"] is None
+        assert result["assessment_state"] == "insufficient_evidence"
+        assert result["behaviour_state"] == "insufficient_evidence"
+        assert result["practice"]["practice_days"] == []
+        assert result["weights"] == {
+            "diversification": 0.25,
+            "discipline": 0.25,
+            "goal_alignment": 0.15,
+            "autonomy": 0.10,
+            "consistency": 0.15,
+            "engagement": 0.10,
+        }
+
+        snapshot = client.post(f"/readiness/{uid}/snapshot").json()
+        assert snapshot["snapshot_recorded"] is False
+        assert snapshot["id"] is None
+
     def test_cancel_and_reflect_credits_the_warning(self, client, learner):
         uid = learner["id"]
 

@@ -5,6 +5,7 @@ import NavBar from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
 import { ScenarioBanner } from "@/components/ScenarioBanner";
 import { AuthGuard } from "@/components/AuthGuard";
+import GlobalChatWidget from "@/components/GlobalChatWidget";
 
 /**
  * Three faces, each doing a specific job.
@@ -77,7 +78,7 @@ export default function RootLayout({
       className={`${sora.variable} ${inter.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col antialiased">
+      <body className="page-bg flex min-h-screen flex-col antialiased">
         {/* Lets keyboard users jump past the nav on every page. Visible only
             when focused. */}
         <a
@@ -87,19 +88,19 @@ export default function RootLayout({
           Skip to main content
         </a>
 
-        {/* Fixed blueprint grid behind everything. Fixed rather than scrolling so
-            content moves against a stable ground, which reads as depth. */}
+        {/* Futuristic grid background */}
         <div
           aria-hidden
-          className="grid-bg pointer-events-none fixed inset-0 z-0 opacity-70"
+          className="grid-bg pointer-events-none fixed inset-0 z-0"
         />
-        {/* Vignette, so the grid fades out at the edges instead of stopping. */}
+        {/* Deep atmospheric glow at top */}
         <div
           aria-hidden
           className="pointer-events-none fixed inset-0 z-0"
           style={{
             background:
-              "radial-gradient(120% 80% at 50% 0%, transparent 40%, rgb(6 7 13 / 0.85) 100%)",
+              "radial-gradient(ellipse 80% 50% at 50% -10%, rgb(124 58 237 / 0.12) 0%, transparent 70%), " +
+              "radial-gradient(ellipse 60% 40% at 80% 60%, rgb(34 211 238 / 0.05) 0%, transparent 70%)",
           }}
         />
 
@@ -107,6 +108,7 @@ export default function RootLayout({
           <AuthGuard />
           <NavBar />
           <ScenarioBanner />
+          <GlobalChatWidget />
           <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
             {children}
           </main>
