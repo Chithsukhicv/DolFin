@@ -16,6 +16,7 @@ Selection is automatic:
 """
 
 from __future__ import annotations
+from functools import lru_cache
 
 import logging
 import math
@@ -69,43 +70,73 @@ class Scored:
     score: float
 
 
+
 # ---------------------------------------------------------------------------
 # Lexical (offline) ranking
 # ---------------------------------------------------------------------------
+
 def _tf_idf_vector(tokens: list[str], idf: dict[str, float]) -> dict[str, float]:
     """L2-normalised TF-IDF vector as a sparse dict."""
     if not tokens:
         return {}
+
     counts = Counter(tokens)
     longest = max(counts.values())
+
     vec = {
         term: (0.5 + 0.5 * (n / longest)) * idf.get(term, 0.0)
         for term, n in counts.items()
     }
+
     norm = math.sqrt(sum(v * v for v in vec.values()))
+
     if norm == 0:
         return {}
+
     return {t: v / norm for t, v in vec.items()}
 
 
 def _sparse_cosine(a: dict[str, float], b: dict[str, float]) -> float:
-    """Both vectors are already L2-normalised, so the dot product is the cosine."""
+    """Both vectors are already L2-normalised."""
     if not a or not b:
         return 0.0
-    # Iterate the shorter side.
+
     if len(a) > len(b):
         a, b = b, a
+
     return sum(weight * b.get(term, 0.0) for term, weight in a.items())
 
 
-class LexicalRanker:
-    """TF-IDF cosine ranking. No network, no model, no heavy dependency.
+@lru_cache(maxsize=4)
+def _prepare_lexical_index(
+    documents: tuple[str, ...],
+) -> tuple[dict[str, float], tuple[dict[str, float], ...]]:
+    """Build and cache the TF-IDF index for an exact corpus snapshot."""
 
-    IDF is computed over the candidate set on each call. That is the right
-    trade-off here: candidate sets are small (a few thousand at most), and
-    computing IDF per call means a freshly indexed chunk is immediately
-    rankable without a separate rebuild step.
-    """
+    docs = [tokenise(text) for text in documents]
+    n = len(docs)
+
+    doc_freq: Counter[str] = Counter()
+
+    for tokens in docs:
+        doc_freq.update(set(tokens))
+
+    # Smoothed IDF. The +1 floor preserves universal terms.
+    idf = {
+        term: math.log((n + 1) / (df + 1)) + 1.0
+        for term, df in doc_freq.items()
+    }
+
+    vectors = tuple(
+        _tf_idf_vector(tokens, idf)
+        for tokens in docs
+    )
+
+    return idf, vectors
+
+
+class LexicalRanker:
+    """Cached TF-IDF cosine ranking with no external dependencies."""
 
     name = "lexical"
 
@@ -113,37 +144,28 @@ class LexicalRanker:
         if not candidates:
             return []
 
-        docs = [tokenise(document_text(c)) for c in candidates]
-        n = len(docs)
+        # Exact document content makes cache invalidation automatic.
+        documents = tuple(
+            document_text(chunk)
+            for chunk in candidates
+        )
 
-        doc_freq: Counter[str] = Counter()
-        for tokens in docs:
-            doc_freq.update(set(tokens))
+        # Reuse the corpus index when its contents have not changed.
+        idf, document_vectors = _prepare_lexical_index(documents)
 
-        # Smoothed IDF with a floor of 1.0 rather than 0.
-        #
-        # The obvious formulation — max(log((n+1)/(df+1)), 0) — sends a term's
-        # weight to ~0 when its document frequency equals the candidate count.
-        # Any query built only from such terms then scores zero on every chunk,
-        # everything is dropped by the relevance floor, and the caller reports "no
-        # grounded material" while relevant chunks sit unretrieved.
-        #
-        # That edge is reachable here because Corpus B is small and formulaic:
-        # roughly a dozen chunks per learner, every body opening "This learner
-        # ...". Shared vocabulary is the norm, not the exception.
-        #
-        # Adding 1.0 is the standard smooth-IDF form. A universal term still ranks
-        # lowest of all terms, but keeps enough weight to survive L2 normalisation
-        # so term frequency and document length can break the tie. Never negative,
-        # because df <= n always holds.
-        idf = {t: math.log((n + 1) / (df + 1)) + 1.0 for t, df in doc_freq.items()}
-
+        # Query vector changes for every search.
         q_vec = _tf_idf_vector(tokenise(query), idf)
+
         out = [
-            Scored(chunk=c, score=_sparse_cosine(q_vec, _tf_idf_vector(tokens, idf)))
-            for c, tokens in zip(candidates, docs)
+            Scored(
+                chunk=chunk,
+                score=_sparse_cosine(q_vec, vector),
+            )
+            for chunk, vector in zip(candidates, document_vectors)
         ]
-        out.sort(key=lambda s: s.score, reverse=True)
+
+        out.sort(key=lambda item: item.score, reverse=True)
+
         return out
 
 
